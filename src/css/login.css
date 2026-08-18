@@ -1,0 +1,156 @@
+﻿/* ================================================
+   LOGIN SCREEN STYLES
+   ================================================ */
+
+.login-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #2c3e50 0%, #3d5166 50%, #1a252f 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+}
+
+.login-card {
+    background: white;
+    border-radius: 20px;
+    padding: 52px 44px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    text-align: center;
+    animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-28px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.login-logo {
+    font-size: 3.2rem;
+    margin-bottom: 10px;
+}
+
+.login-card h2 {
+    margin: 0 0 6px;
+    color: #2c3e50;
+    font-size: 1.75rem;
+    font-family: "Segoe UI", sans-serif;
+    font-weight: 700;
+}
+
+.login-card .subtitle {
+    color: #7f8c8d;
+    font-size: 0.92rem;
+    margin-bottom: 36px;
+    font-family: "Segoe UI", sans-serif;
+}
+
+/* ---- Google Button ---- */
+.btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 20px;
+    background: white;
+    color: #3c4043;
+    border: 2px solid #dadce0;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: "Segoe UI", "Roboto", sans-serif;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.1s;
+    letter-spacing: 0.01em;
+}
+
+.btn-google:hover {
+    background: #f8f9fa;
+    border-color: #bdc3c7;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+}
+
+.btn-google:active {
+    transform: scale(0.98);
+}
+
+.btn-google:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.google-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+/* ---- Error message ---- */
+.login-error {
+    background: #fdecea;
+    border: 1px solid #f5c6cb;
+    color: #c0392b;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    font-family: "Segoe UI", sans-serif;
+    margin-top: 16px;
+    display: none;
+    text-align: left;
+    line-height: 1.4;
+}
+
+.login-error.visible { display: block; }
+
+/* ================================================
+   TOP BAR (shown when logged in)
+   ================================================ */
+
+.top-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: #2c3e50;
+    color: white;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.85rem;
+}
+
+.user-photo {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+    object-fit: cover;
+}
+
+.top-bar .user-info {
+    opacity: 0.9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+.btn-logout {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-family: "Segoe UI", sans-serif;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.btn-logout:hover { background: rgba(255,255,255,0.25); }

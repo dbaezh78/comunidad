@@ -1,4 +1,4 @@
-let todasLasPersonas = [];
+﻿let todasLasPersonas = [];
 let seleccionados = [];
 
 // 1. Cargar datos del JSON
@@ -121,4 +121,7 @@ function mostrarResultados(grupos) {
     });
 }
 
-cargarNombres();
+// Esperar la señal de autenticación antes de inicializar
+window.addEventListener("app:ready", () => {
+    cargarNombres();
+});

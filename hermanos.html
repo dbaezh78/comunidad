@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon"       href="src/img/ico.ico" type="image/x-icon">
+    <link rel="stylesheet" href="src/css/login.css">
+    <link rel="stylesheet" href="src/css/app.css">
+    <title>Hermanos — Comunidad</title>
+</head>
+<body>
+
+<!-- ══ LOGIN OVERLAY ══ -->
+<div id="login-overlay" class="login-overlay">
+    <div class="login-card">
+        <div class="login-logo">⛪</div>
+        <h2>Comunidad 4</h2>
+        <p class="subtitle">Inicia sesión para continuar</p>
+        <button id="btn-google" class="btn-google">
+            <svg class="google-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                <path fill="none" d="M0 0h48v48H0z"/>
+            </svg>
+            <span id="google-btn-text">Continuar con Google</span>
+        </button>
+        <div id="login-error" class="login-error"></div>
+    </div>
+</div>
+
+<!-- ══ APP CONTENT ══ -->
+<div id="app-content" style="display:none;">
+
+    <nav class="nav-bar">
+        <span class="nav-logo">⛪ Comunidad</span>
+        <a href="index.html"     class="nav-link"><span class="nav-icon">🎲</span> Sorteo</a>
+        <a href="hermanos.html"  class="nav-link"><span class="nav-icon">👥</span> Hermanos</a>
+        <a href="comunidad.html" class="nav-link"><span class="nav-icon">🏠</span> Comunidad</a>
+        <a href="parroquia.html" class="nav-link"><span class="nav-icon">⛪</span> Parroquia</a>
+        <a href="realidad.html"  class="nav-link"><span class="nav-icon">📚</span> Realidad</a>
+        <a href="modulos.html"   class="nav-link"><span class="nav-icon">🧩</span> Módulos</a>
+    </nav>
+
+    <div id="top-bar" class="top-bar" style="display:none;">
+        <img id="user-photo" class="user-photo" src="" alt="" style="display:none;">
+        <span class="user-info" id="user-info"></span>
+        <button id="btn-ajustes" class="btn-outline" style="margin-right:8px; padding:6px 12px; font-size:0.85rem; border-radius:5px; cursor:pointer; background:white; color:var(--text); border:1px solid #ccc; font-family:sans-serif;">⚙️ Ajustes</button><button id="btn-logout" class="btn-logout">Cerrar sesión</button>
+    </div>
+
+    <div class="page-content">
+        
+        <!-- Header con buscador y botón nuevo -->
+        <div class="parroquia-header">
+            <h2 class="page-title" style="margin:0;">👥 Directorio de Hermanos</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input type="text" id="search-input" placeholder="Buscar por nombre..." style="padding:8px 12px; border:1px solid var(--border); border-radius:5px; width:250px;">
+                <button id="btn-nuevo-hermano" class="btn btn-success">+ Nuevo Hermano</button>
+            </div>
+        </div>
+
+        <div id="global-alert" class="alert"></div>
+
+        <!-- ── FORMULARIO (crear / editar) ── -->
+        <div id="form-panel" style="display:none;">
+            <div class="card">
+                <div class="card-title" id="form-title">📋 Registrar Hermano</div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Estado del Hermano *</label>
+                        <select id="h-activo">
+                            <option value="true">Activo</option>
+                            <option value="false">No Activo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Parroquia *</label>
+                        <select id="h-parroquia"><option value="">— Seleccionar —</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Comunidad *</label>
+                        <select id="h-comunidad"><option value="">— Primero parroquia —</option></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Sexo *</label>
+                        <select id="h-sexo">
+                            <option value="M">👨 Masculino</option>
+                            <option value="F">👩 Femenino</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha de Nacimiento</label>
+                        <input type="date" id="h-fecha-nacimiento">
+                    </div>
+
+                    <div style="display: flex; flex-direction: row; gap: 8px; width: 100%;">
+                        <div class="form-group" style="flex: 2; margin: 0; display: flex; flex-direction: column; gap: 5px;">
+                            <label>Razón *</label>
+                            <select id="h-razon">
+                                <option value="Hermano">Hermano</option>
+                                <option value="Hermana">Hermana</option>
+                                <option value="Responsable">Responsable</option>
+                                <option value="Comunidad Celeste">Comunidad Celeste</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="h-num-responsable-group" style="flex: 1; margin: 0; display: none; flex-direction: column; gap: 5px;">
+                            <label>#</label>
+                            <select id="h-num-responsable">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado Civil *</label>
+                        <select id="h-estado-civil">
+                            <option value="Soltero">Soltero/a</option>
+                            <option value="Casado">Casado/a</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Primer Nombre *</label>
+                        <input type="text" id="h-nombre1" placeholder="Ej: Juan">
+                    </div>
+                    <div class="form-group">
+                        <label>Segundo Nombre</label>
+                        <input type="text" id="h-nombre2">
+                    </div>
+                    <div class="form-group">
+                        <label>Primer Apellido *</label>
+                        <input type="text" id="h-apellido1" placeholder="Ej: Pérez">
+                    </div>
+                    <div class="form-group">
+                        <label>Segundo Apellido</label>
+                        <input type="text" id="h-apellido2">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Correo Electrónico</label>
+                        <input type="email" id="h-correo" placeholder="ejemplo@correo.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono / Celular</label>
+                        <input type="tel" id="h-telefono" placeholder="809-000-0000">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Dirección</label>
+                        <input type="text" id="h-direccion" placeholder="Calle, Número, Sector...">
+                    </div>
+
+                    <!-- Campos de familia (cónyuge e hijos) -->
+                    <div class="form-group" id="h-esposo-group" style="display:none;">
+                        <label>Pareja</label>
+                        <select id="h-esposo-select">
+                            <option value="">— Seleccionar pareja —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad de Hijos</label>
+                        <input type="number" id="h-hijos-cantidad" min="0" value="0" style="width: 132px;">
+                    </div>
+                    <div class="form-group full-width" id="h-hijos-tabla-group" style="display:none;">
+                        <label>Datos de los Hijos</label>
+                        <table class="hermanos-table" id="h-hijos-tabla" style="margin-top:8px;">
+                            <thead>
+                                <tr>
+                                    <th>Nombre del Hijo/a</th>
+                                    <th>Fecha de Cumpleaños</th>
+                                </tr>
+                            </thead>
+                            <tbody id="h-hijos-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Ubicación (Coordenadas)</label>
+                        <button type="button" id="btn-location" class="btn-location">📍 Obtener ubicación actual</button>
+                        <p id="location-status" style="font-size:0.82rem;color:#7f8c8d;margin-top:4px;"></p>
+                        <input type="hidden" id="h-lat">
+                        <input type="hidden" id="h-lng">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Carismas</label>
+                        <div class="realidades-check-grid" id="h-carismas-check-grid">
+                            <!-- Checkboxes dinámicos -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-actions" style="margin-top:20px;">
+                    <button id="btn-save" class="btn btn-primary">💾 Guardar</button>
+                    <button id="btn-cancel" class="btn btn-outline">Cancelar</button>
+                    <button id="btn-delete" class="btn btn-accent" style="display:none;">🗑️ Eliminar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── LISTADO DE HERMANOS ── -->
+        <div id="list-panel">
+            <div id="loading-state" class="loading-state">
+                <div class="spinner"></div><span>Cargando hermanos...</span>
+            </div>
+            
+            <div id="empty-state" class="empty-state" style="display:none;">
+                <p style="font-size:2rem;">👥</p>
+                <p>No hay hermanos registrados o la búsqueda no arrojó resultados.</p>
+            </div>
+
+            <div class="card" id="table-card" style="display:none; overflow-x:auto;">
+                <table class="hermanos-table" id="hermanos-table">
+                    <thead>
+                        <tr>
+                            <th id="th-nombre" style="cursor:pointer; user-select:none;">Nombre Completo ↕️</th>
+                            <th id="th-parroquia" style="cursor:pointer; user-select:none;">Parroquia ↕️</th>
+                            <th id="th-comunidad" style="cursor:pointer; user-select:none;">Comunidad ↕️</th>
+                            <th id="th-telefono" style="cursor:pointer; user-select:none;">Teléfono ↕️</th>
+                            <th id="th-responsable" style="cursor:pointer; user-select:none;">Responsable ↕️</th>
+                            <th style="text-align:center;">Ubic.</th>
+                            <th style="text-align:center;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hermanos-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Excel-style Column Filter Menu -->
+<div id="excel-filter-menu" class="excel-filter-menu" style="display:none; position:fixed; background:white; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; padding:12px; width:220px; font-family:'Segoe UI',sans-serif;">
+    <div style="font-weight:bold; margin-bottom:8px; font-size:0.85rem; color:var(--primary); display:flex; justify-content:space-between; align-items:center;">
+        <span>Filtrar valores</span>
+        <button id="ef-close" style="background:none; border:none; cursor:pointer; font-size:1.2rem; line-height:1; color:#888; font-weight:bold;">&times;</button>
+    </div>
+    <input type="text" id="ef-search" placeholder="Buscar..." style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:0.8rem; box-sizing:border-box; margin-bottom:8px; outline:none;">
+    <div id="ef-list" style="max-height:150px; overflow-y:auto; border:1px solid #eee; padding:6px; border-radius:4px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; font-size:0.82rem; max-width:100%; box-sizing:border-box;">
+        <!-- Checkboxes -->
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:6px;">
+        <button id="ef-btn-cancel" class="btn btn-sm btn-outline" style="padding:4px 8px; font-size:0.75rem;">Cancelar</button>
+        <button id="ef-btn-apply" class="btn btn-sm btn-primary" style="padding:4px 8px; font-size:0.75rem;">Aceptar</button>
+    </div>
+</div>
+
+<script type="module" src="src/js/auth.js"></script>
+<script type="module" src="src/js/hermanos-app.js"></script>
+</body>
+</html>
+

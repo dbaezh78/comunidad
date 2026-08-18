@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon"       href="src/img/ico.ico" type="image/x-icon">
+    <link rel="stylesheet" href="src/css/hermanos.css">
+    <link rel="stylesheet" href="src/css/login.css">
+    <link rel="stylesheet" href="src/css/app.css">
+    <title>Comunidad — Gestión</title>
+</head>
+<body>
+
+<!-- ══ LOGIN OVERLAY ══════════════════════════════════════════════ -->
+<div id="login-overlay" class="login-overlay">
+    <div class="login-card">
+        <div class="login-logo">⛪</div>
+        <h2>Comunidad 4</h2>
+        <p class="subtitle">Inicia sesión para continuar</p>
+        <button id="btn-google" class="btn-google">
+            <svg class="google-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                <path fill="none" d="M0 0h48v48H0z"/>
+            </svg>
+            <span id="google-btn-text">Continuar con Google</span>
+        </button>
+        <div id="login-error" class="login-error"></div>
+    </div>
+</div>
+
+<!-- ══ APP CONTENT ════════════════════════════════════════════════ -->
+<div id="app-content" style="display:none;">
+
+    <!-- Nav -->
+    <nav class="nav-bar">
+        <span class="nav-logo">⛪ Comunidad</span>
+        <a href="index.html"     class="nav-link"><span class="nav-icon">🎲</span> Sorteo</a>
+        <a href="hermanos.html"  class="nav-link"><span class="nav-icon">👥</span> Hermanos</a>
+        <a href="comunidad.html" class="nav-link"><span class="nav-icon">🏠</span> Comunidad</a>
+        <a href="parroquia.html" class="nav-link"><span class="nav-icon">⛪</span> Parroquia</a>
+        <a href="realidad.html"  class="nav-link"><span class="nav-icon">📚</span> Realidad</a>
+        <a href="modulos.html"   class="nav-link"><span class="nav-icon">🧩</span> Módulos</a>
+    </nav>
+
+    <!-- Top bar -->
+    <div id="top-bar" class="top-bar" style="display:none;">
+        <img id="user-photo" class="user-photo" src="" alt="" style="display:none;">
+        <span class="user-info" id="user-info"></span>
+        <button id="btn-ajustes" class="btn-outline" style="margin-right:8px; padding:6px 12px; font-size:0.85rem; border-radius:5px; cursor:pointer; background:white; color:var(--text); border:1px solid #ccc; font-family:sans-serif;">⚙️ Ajustes</button><button id="btn-logout" class="btn-logout">Cerrar sesión</button>
+    </div>
+
+    <div class="page-content">
+
+        <!-- Selector de comunidad -->
+        <div class="card" id="selector-card">
+            <div class="card-title">🏠 Seleccionar Comunidad</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="sel-parroquia">Parroquia</label>
+                    <select id="sel-parroquia">
+                        <option value="">— Seleccionar —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="sel-comunidad">Comunidad</label>
+                    <select id="sel-comunidad" disabled>
+                        <option value="">— Primero selecciona parroquia —</option>
+                    </select>
+                </div>
+                <div class="form-group" style="align-self:flex-end;">
+                    <button id="btn-nueva-comunidad" class="btn btn-success">+ Nueva Comunidad</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading-state" class="loading-state" style="display:none;">
+            <div class="spinner"></div><span>Cargando...</span>
+        </div>
+
+        <!-- ── Panel principal (oculto hasta seleccionar comunidad) ── -->
+        <div id="main-panel" style="display:none;">
+
+            <!-- Alerta global -->
+            <div id="global-alert" class="alert"></div>
+
+            <!-- ── Datos de la comunidad ── -->
+            <div class="card">
+                <div class="card-title" style="justify-content:space-between;">
+                    <span>📋 Datos de la Comunidad</span>
+                    <button id="btn-toggle-datos" class="btn btn-sm btn-outline">✏️ Editar</button>
+                </div>
+
+                <!-- Vista de datos -->
+                <div id="datos-view">
+                    <div class="profile-grid">
+                        <div class="profile-field"><div class="label">Parroquia</div><div class="value" id="d-parroquia">—</div></div>
+                        <div class="profile-field"><div class="label">No. Comunidad</div><div class="value" id="d-numero">—</div></div>
+                        <div class="profile-field"><div class="label">Fecha de Formación</div><div class="value" id="d-fecha">—</div></div>
+                        <div class="profile-field"><div class="label">Tipo</div><div class="value" id="d-tipo">—</div></div>
+                        <div class="profile-field"><div class="label">Catequista</div><div class="value" id="d-catequista">—</div></div>
+                        <div class="profile-field"><div class="label">Hermanos Activos</div><div class="value" id="d-activos">0</div></div>
+                        <div class="profile-field"><div class="label">Hermanos Inactivos</div><div class="value" id="d-inactivos">0</div></div>
+                    </div>
+                    <div id="d-origen-wrap" style="display:none;margin-top:10px;">
+                        <div class="profile-field"><div class="label">Comunidades de Origen</div><div class="value" id="d-origen">—</div></div>
+                    </div>
+                </div>
+
+                <!-- Formulario de datos -->
+                <div id="datos-form" style="display:none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="c-numero">No. Comunidad *</label>
+                            <input type="number" id="c-numero" min="1" placeholder="4">
+                        </div>
+                        <div class="form-group">
+                            <label for="c-fecha">Fecha de Formación *</label>
+                            <input type="date" id="c-fecha">
+                        </div>
+                        <div class="form-group">
+                            <label for="c-tipo">Tipo</label>
+                            <select id="c-tipo">
+                                <option value="normal">Normal</option>
+                                <option value="union">Unión (dos comunidades juntas)</option>
+                                <option value="fusion">Fusión (nueva identidad)</option>
+                            </select>
+                        </div>
+                        <div class="form-group full-width" style="margin-top:10px;">
+                            <label style="font-weight:700; color:var(--primary); margin-bottom:8px; display:block;">Catequista</label>
+                            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width:100%;">
+                                <div class="form-group" style="margin:0;">
+                                    <label style="font-size:0.75rem; color:var(--text-muted);">Parroquia</label>
+                                    <select id="c-catequista-parroquia"><option value="">— Seleccionar —</option></select>
+                                </div>
+                                <div class="form-group" style="margin:0;">
+                                    <label style="font-size:0.75rem; color:var(--text-muted);">Comunidad</label>
+                                    <select id="c-catequista-comunidad" disabled><option value="">— Seleccionar parroquia —</option></select>
+                                </div>
+                                <div class="form-group" style="margin:0;">
+                                    <label style="font-size:0.75rem; color:var(--text-muted);">Nombre del Hermano</label>
+                                    <select id="c-catequista-hermano" disabled><option value="">— Seleccionar comunidad —</option></select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="origen-wrap" style="display:none;margin-top:12px;">
+                        <div class="form-group">
+                            <label for="c-origen">Comunidades de Origen (ej: 4, 5)</label>
+                            <input type="text" id="c-origen" placeholder="Comunidad 4, Comunidad 5">
+                        </div>
+                    </div>
+                    <div class="btn-actions" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btn-save-datos" class="btn btn-primary">💾 Guardar Datos</button>
+                            <button id="btn-cancel-datos" class="btn btn-outline">Cancelar</button>
+                        </div>
+                        <button id="btn-delete-comunidad" class="btn btn-accent" style="display:none;">🗑️ Eliminar Comunidad</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Responsables ── -->
+            <div class="card" id="card-responsables">
+                <div class="card-title">
+                    <span>🎖️ Responsables</span>
+                </div>
+
+                <!-- Vista responsables -->
+                <div id="resp-view">
+                    <table class="hermanos-table" id="resp-table">
+                        <thead>
+                            <tr>
+                                <th>Posición</th>
+                                <th>Responsable</th>
+                                <th>Estado</th>
+                                <th>Pareja</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resp-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ── Lista de Hermanos ── -->
+            <div class="card" id="card-hermanos">
+                <div class="card-title" style="justify-content:space-between;">
+                    <span>👥 Hermanos de la Comunidad</span>
+                    <span id="hermanos-count" style="font-size:0.82rem;color:#7f8c8d;font-weight:400;"></span>
+                </div>
+
+                <div id="hermanos-loading" class="loading-state" style="display:none;padding:30px 0;">
+                    <div class="spinner"></div><span>Cargando hermanos...</span>
+                </div>
+
+                <div id="hermanos-empty" class="empty-state" style="display:none;">
+                    No hay hermanos registrados en esta comunidad.
+                </div>
+
+                <div style="overflow-x:auto;">
+                    <table class="hermanos-table" id="hermanos-table" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Cumpleaños</th>
+                                <th>Celular</th>
+                                <th style="text-align:center;">Ubic.</th>
+                                <th style="text-align:center;">Rol</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hermanos-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div><!-- /main-panel -->
+    </div><!-- /page-content -->
+</div><!-- /app-content -->
+
+<script type="module" src="src/js/auth.js"></script>
+<script type="module" src="src/js/comunidad-app.js"></script>
+</body>
+</html>
+
+
+

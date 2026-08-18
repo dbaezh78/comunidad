@@ -1,0 +1,775 @@
+/* ================================================
+   APP.CSS — Estilos compartidos del sistema
+   ================================================ */
+
+:root {
+    --primary:   #2c3e50;
+    --primary-l: #34495e;
+    --accent:    #e74c3c;
+    --accent-l:  #c0392b;
+    --success:   #27ae60;
+    --warning:   #f39c12;
+    --bg:        #f4f7f6;
+    --card-bg:   #ffffff;
+    --border:    #dde1e7;
+    --text:      #2c3e50;
+    --text-muted:#7f8c8d;
+    --radius:    10px;
+    --shadow:    0 2px 12px rgba(0,0,0,0.08);
+}
+
+/* ── Reset básico ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ── Nav bar ── */
+.nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 16px;
+    background: var(--primary);
+    border-bottom: 3px solid var(--accent);
+    flex-wrap: wrap;
+}
+
+.nav-logo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
+    padding: 10px 12px 10px 0;
+    margin-right: 8px;
+    border-right: 1px solid rgba(255,255,255,0.2);
+    font-family: "Segoe UI", sans-serif;
+    white-space: nowrap;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    color: rgba(255,255,255,0.75);
+    text-decoration: none;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.88rem;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+.nav-link:hover         { color: white; background: rgba(255,255,255,0.1); }
+.nav-link.active        { color: white; background: rgba(255,255,255,0.15); font-weight: 600; }
+.nav-link .nav-icon     { font-size: 1rem; }
+
+/* ── Top bar (auth info) ── */
+.top-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    background: var(--primary-l);
+    color: white;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.82rem;
+}
+
+.user-photo {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.35);
+    object-fit: cover;
+}
+
+.top-bar .user-info {
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.btn-logout {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    font-family: "Segoe UI", sans-serif;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+.btn-logout:hover { background: rgba(255,255,255,0.25); }
+
+/* ── Page layout ── */
+.page-content {
+    max-width: 1000px;
+    margin: 28px auto;
+    padding: 0 16px;
+}
+
+.page-title {
+    font-family: "Segoe UI", sans-serif;
+    color: var(--primary);
+    font-size: 1.5rem;
+    margin: 0 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ── Cards ── */
+.card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 25px;
+    margin-bottom: 24px;
+}
+
+.card-title {
+    font-family: "Segoe UI", sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--bg);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Formularios ── */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group.full-width { grid-column: 1 / -1; }
+
+.form-group label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: "Segoe UI", sans-serif;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 7px;
+    font-size: 0.95rem;
+    font-family: "Segoe UI", sans-serif;
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+    background: white;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(44,62,80,0.1);
+}
+
+.form-group input:read-only {
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.radio-group {
+    display: flex;
+    gap: 16px;
+    padding: 6px 0;
+}
+
+.radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text);
+    cursor: pointer;
+}
+
+/* ── Botones ── */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 10px;
+    border: none;
+    border-radius: 7px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: "Segoe UI", sans-serif;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-l); box-shadow: 0 2px 8px rgba(44,62,80,0.3); }
+
+.btn-accent { background: var(--accent); color: white; }
+.btn-accent:hover { background: var(--accent-l); }
+
+.btn-success { background: var(--success); color: white; align-self: center;}
+.btn-success:hover { background: #219a52; }
+
+.btn-outline {
+    background: white;
+    color: var(--primary);
+    border: 2px solid var(--border);
+}
+.btn-outline:hover { border-color: var(--primary); background: var(--bg); }
+
+.btn-sm { padding: 2px 2px; font-size: 0.82rem; }
+/*.btn-sm { padding: 6px 12px; font-size: 0.82rem; }*/
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--bg);
+}
+
+/* ── Location button ── */
+.btn-location {
+    background: #4285F4;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-family: "Segoe UI", sans-serif;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: 100%;
+    justify-content: center;
+}
+.btn-location:hover { background: #3367d6; }
+.btn-location.got    { background: var(--success); }
+
+/* ── Tabla de hermanos ── */
+.hermanos-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.88rem;
+}
+
+.hermanos-table th {
+    background: var(--bg);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 7px 0px;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+}
+
+.hermanos-table td {
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+}
+
+.hermanos-table tbody tr:nth-child(even) td {
+    background-color: #f1f5f9;
+}
+
+.hermanos-table tbody tr:nth-child(odd) td {
+    background-color: #ffffff;
+}
+
+.hermanos-table tr:hover td {
+    background: #e2e8f0;
+}
+
+.badge-rol {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.badge-1ro { background: #fdecea; color: var(--accent); }
+.badge-2do { background: #fef3e2; color: #e67e22; }
+.badge-3ro { background: #eafaf1; color: var(--success); }
+.badge-nro { background: #eaf0fb; color: #2980b9; }
+.badge-hno { background: var(--bg); color: var(--text-muted); }
+
+.icon-maps {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e8f0fe;
+    color: #4285F4;
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+.icon-maps:hover { background: #d2e3fc; }
+
+/* ── Responsables grid ── */
+.responsables-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.responsable-slot {
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    background: var(--bg);
+    transition: border-color 0.2s;
+}
+
+.responsable-slot.obligatorio { border-color: #f5c6cb; background: #fdf4f4; }
+.responsable-slot.asignado    { border-color: #a8d5b5; background: #f4fdf7; }
+
+.responsable-slot .slot-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+.responsable-slot.obligatorio .slot-label { color: var(--accent); }
+
+.hermano-search {
+    position: relative;
+}
+
+.hermano-search input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.88rem;
+    font-family: "Segoe UI", sans-serif;
+    outline: none;
+}
+
+.hermano-search input:focus { border-color: var(--primary); }
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    z-index: 100;
+    max-height: 180px;
+    overflow-y: auto;
+    display: none;
+}
+
+.search-results.open { display: block; }
+
+.search-result-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-family: "Segoe UI", sans-serif;
+    transition: background 0.15s;
+}
+.search-result-item:hover { background: var(--bg); }
+
+.assigned-hermano {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    border: 1px solid #a8d5b5;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.88rem;
+    font-family: "Segoe UI", sans-serif;
+}
+
+.assigned-hermano .btn-remove {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+/* ── Estados de carga y vacío ── */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    font-family: "Segoe UI", sans-serif;
+    gap: 12px;
+}
+
+.spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.92rem;
+}
+
+/* ── Alerts ── */
+.alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: "Segoe UI", sans-serif;
+    font-size: 0.88rem;
+    margin-bottom: 16px;
+    display: none;
+}
+.alert.visible { display: block; }
+.alert-error   { background: #fdecea; border: 1px solid #f5c6cb; color: #c0392b; }
+.alert-success { background: #eafaf1; border: 1px solid #a8d5b5; color: #196f3d; }
+.alert-info    { background: #eaf0fb; border: 1px solid #aed6f1; color: #1a5276; }
+
+/* ── Profile view ── */
+.profile-field {
+    margin-bottom: 12px;
+}
+
+.profile-field .label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    font-family: "Segoe UI", sans-serif;
+    margin-bottom: 2px;
+}
+
+.profile-field .value {
+    font-size: 0.95rem;
+    color: var(--text);
+    font-family: "Segoe UI", sans-serif;
+}
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .page-content  { padding: 0 10px; margin: 16px auto; }
+    .card          { padding: 16px; }
+    .form-grid     { grid-template-columns: 1fr; }
+    .nav-bar       { gap: 0; }
+    .nav-link      { padding: 8px 10px; font-size: 0.82rem; }
+    .nav-logo      { font-size: 0.95rem; }
+    .hermanos-table { font-size: 0.8rem; }
+    .hermanos-table th,
+    .hermanos-table td { padding: 8px 6px; }
+}
+
+/* ── Tag pills (para No# Comunidades en realidad) ── */
+.tags-input-wrap {
+    border: 2px solid var(--border);
+    border-radius: 7px;
+    padding: 6px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    background: white;
+    min-height: 44px;
+    cursor: text;
+    transition: border-color 0.2s;
+}
+.tags-input-wrap:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(44,62,80,0.1); }
+
+.tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--primary);
+    color: white;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.82rem;
+    font-family: "Segoe UI", sans-serif;
+    font-weight: 600;
+}
+
+.tag-pill button {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.8);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+.tag-pill button:hover { color: white; }
+
+.tags-ghost-input {
+    border: none;
+    outline: none;
+    font-size: 0.9rem;
+    font-family: "Segoe UI", sans-serif;
+    min-width: 80px;
+    flex: 1;
+    padding: 2px 4px;
+    color: var(--text);
+}
+
+.tags-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-family: "Segoe UI", sans-serif;
+    margin-top: 4px;
+}
+
+/* ── Realidad cards ── */
+.realidad-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.realidad-card {
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.realidad-card:hover          { border-color: var(--primary); box-shadow: var(--shadow); }
+.realidad-card.selected       { border-color: var(--primary); background: #f0f4f8; }
+.realidad-card .rc-nombre     { font-weight: 700; color: var(--primary); font-family: "Segoe UI",sans-serif; font-size: 1rem; margin-bottom: 6px; }
+.realidad-card .rc-comunidades{ font-size: 0.82rem; color: var(--text-muted); font-family: "Segoe UI",sans-serif; }
+.realidad-card .rc-catequista { font-size: 0.85rem; color: var(--text); font-family: "Segoe UI",sans-serif; margin-top: 6px; }
+
+/* ── Checkboxes realidades ── */
+.realidades-check-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 10px;
+    background: var(--bg);
+    border-radius: 7px;
+    border: 2px solid var(--border);
+}
+
+.realidad-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-family: "Segoe UI", sans-serif;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.realidad-check-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+/* ── Parroquia info view ── */
+.parroquia-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* ── MODAL STYLES ── */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+.modal-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+.modal-container {
+    background: white;
+    border-radius: var(--radius);
+    width: 90%;
+    max-width: 500px;
+    padding: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    transform: translateY(-20px);
+    transition: transform 0.2s ease;
+}
+.modal-overlay.open .modal-container {
+    transform: translateY(0);
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+.modal-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 0;
+}
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+.modal-body {
+    margin-bottom: 20px;
+}
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Ajustes panel styles */
+.ajustes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+.ajuste-card {
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+.ajuste-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+}
+.ajuste-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+}
+.ajuste-name {
+    font-weight: 700;
+    color: var(--text);
+}
+.ajuste-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Simple inline list for carismas in list */
+.carismas-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+.carisma-tag {
+    background: #eef2f7;
+    color: #475569;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+/* Resizable table columns */
+.hermanos-table th {
+    position: relative;
+}
+
+.resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 12px;
+    cursor: col-resize;
+    user-select: none;
+    height: 100%;
+    z-index: 100;
+}
+
+.resizer:hover,
+.resizing {
+    border-right: 3px solid var(--primary);
+}
