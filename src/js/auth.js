@@ -157,7 +157,7 @@ function allowUserAccess(user) {
             <a href="index.html"     class="nav-link ${currentPath === 'index.html' || currentPath === '' ? 'active' : ''}"><span class="nav-icon">🏠</span> Home</a>
             <a href="parroquia.html" class="nav-link ${currentPath === 'parroquia.html' ? 'active' : ''}"><span class="nav-icon">⛪</span> Parroquia</a>
             <a href="catequista.html" class="nav-link ${currentPath === 'catequista.html' ? 'active' : ''}"><span class="nav-icon">📖</span> Catequistas</a>
-            <a href="comunidad.html" class="nav-link ${currentPath === 'comunidad.html' ? 'active' : ''}"><span class="nav-icon">👥</span> Comunidad</a>
+            <a href="comunidad.html" class="nav-link ${currentPath === 'comunidad.html' ? 'active' : ''}"><span class="nav-icon" style="background:#ffffff; border-radius:4px; padding:2px; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; line-height:1;">👥</span> Comunidad</a>
             <a href="hermanos.html"  class="nav-link ${currentPath === 'hermanos.html' ? 'active' : ''}"><span class="nav-icon">👨‍👩‍👧‍👦</span> Hermanos</a>
             <a href="realidad.html"  class="nav-link ${currentPath === 'realidad.html' ? 'active' : ''}"><span class="nav-icon">📚</span> Realidad</a>
             <a href="itinerario.html" class="nav-link ${currentPath === 'itinerario.html' ? 'active' : ''}"><span class="nav-icon">🗺️</span> Itinerario</a>

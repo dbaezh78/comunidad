@@ -23,12 +23,18 @@ let todasRealidades = [];
 let defaultRealidadId = "";
 let editingId = null;
 
+let currentSortColumn = "nombre";
+let currentSortDir = "asc";
+let activeFilters = { nombre: [], detalle: [], otros: [] };
+let filterHistory = [];
+
 // App Ready
 window.addEventListener("app:ready", async () => {
     btnSave.addEventListener("click", saveStage);
     btnCancel.addEventListener("click", resetForm);
-    searchInput.addEventListener("input", filterStages);
+    searchInput.addEventListener("input", () => filterStages());
     filterRealidad.addEventListener("change", onFilterRealidadChange);
+    setupSortingListeners();
 
     await loadRealidades();
     await loadStages();
@@ -155,33 +161,47 @@ async function seedDefaultStages() {
     }
 }
 
-function renderTable(lista) {
+function renderTable(lista, isFilteredCall = false) {
+    if (!isFilteredCall) {
+        filterStages();
+        return;
+    }
+
     tbody.innerHTML = "";
 
-    const activeRealidadId = filterRealidad.value;
-
-    // Filter stages belonging to the currently selected reality
-    const filteredByRealidad = lista.filter(s => {
-        if (!s.realidadId && activeRealidadId === defaultRealidadId) return true;
-        return s.realidadId === activeRealidadId;
-    });
-
-    if (filteredByRealidad.length === 0) {
+    if (lista.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px; color:#999;">No se encontraron etapas para esta realidad.</td></tr>';
         return;
     }
 
-    filteredByRealidad.forEach(s => {
+    lista.forEach(s => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td><strong>${s.nombre}</strong></td>
-            <td>${s.detalle || "—"}</td>
-            <td>${s.otros || "—"}</td>
+            <td><strong class="click-filter" data-col="nombre" style="cursor:pointer; color:var(--primary);">${s.nombre}</strong></td>
+            <td><span class="click-filter" data-col="detalle" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.detalle || "—"}</span></td>
+            <td><span class="click-filter" data-col="otros" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.otros || "—"}</span></td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit" data-id="${s.id}">✏️ Editar</button>
+                <button class="btn btn-sm btn-outline btn-edit" data-id="${s.id}">✏️</button>
                 <button class="btn btn-sm btn-outline btn-delete" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${s.id}">✕</button>
             </td>
         `;
+
+        tr.querySelectorAll(".click-filter").forEach(el => {
+            el.addEventListener("click", () => {
+                const col = el.dataset.col;
+                const val = el.textContent.trim();
+                if (val && val !== "—") {
+                    if (!activeFilters[col].includes(val)) {
+                        activeFilters[col].push(val);
+                    } else {
+                        activeFilters[col] = activeFilters[col].filter(v => v !== val);
+                    }
+                    renderActiveFilterChips();
+                    updateHeaderLabels();
+                    filterStages();
+                }
+            });
+        });
 
         tr.querySelector(".btn-edit").addEventListener("click", () => editStage(s));
         tr.querySelector(".btn-delete").addEventListener("click", () => deleteStage(s.id));
@@ -191,14 +211,157 @@ function renderTable(lista) {
 
 function filterStages() {
     const q = searchInput.value.toLowerCase().trim();
-    if (!q) { renderTable(allStages); return; }
+    const activeRealidadId = filterRealidad.value;
 
-    const filtered = allStages.filter(s => {
-        const nom = (s.nombre || "").toLowerCase();
-        const det = (s.detalle || "").toLowerCase();
-        return nom.includes(q) || det.includes(q);
+    // Filter stages belonging to the currently selected reality
+    let filtered = allStages.filter(s => {
+        if (!s.realidadId && activeRealidadId === defaultRealidadId) return true;
+        return s.realidadId === activeRealidadId;
     });
-    renderTable(filtered);
+
+    // Apply active filter chips
+    if (activeFilters.nombre.length > 0) {
+        filtered = filtered.filter(s => activeFilters.nombre.includes(s.nombre));
+    }
+    if (activeFilters.detalle.length > 0) {
+        filtered = filtered.filter(s => activeFilters.detalle.includes(s.detalle));
+    }
+    if (activeFilters.otros.length > 0) {
+        filtered = filtered.filter(s => activeFilters.otros.includes(s.otros));
+    }
+
+    // Apply text search
+    if (q) {
+        filtered = filtered.filter(s => {
+            const nom = (s.nombre || "").toLowerCase();
+            const det = (s.detalle || "").toLowerCase();
+            return nom.includes(q) || det.includes(q);
+        });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+        let valA = a[currentSortColumn] || "";
+        let valB = b[currentSortColumn] || "";
+        
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+
+        if (valA < valB) return currentSortDir === "asc" ? -1 : 1;
+        if (valA > valB) return currentSortDir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    renderTable(filtered, true);
+}
+
+function setupSortingListeners() {
+    const headers = ["nombre", "detalle", "otros"];
+    headers.forEach(h => {
+        const th = document.getElementById(`th-${h}`);
+        if (th) {
+            th.addEventListener("click", () => handleSort(h));
+        }
+    });
+    setupColumnRightClickFilters();
+}
+
+function handleSort(col) {
+    if (currentSortColumn === col) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+    } else {
+        currentSortColumn = col;
+        currentSortDir = "asc";
+    }
+    updateHeaderLabels();
+    filterStages();
+}
+
+function updateHeaderLabels() {
+    const cols = {
+        "nombre": "Nombre de la Etapa",
+        "detalle": "Detalle / Descripción",
+        "otros": "Otros"
+    };
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-${k}`);
+        if (!th) return;
+        
+        let arrow = "↕️";
+        if (k === currentSortColumn) {
+            arrow = currentSortDir === "asc" ? "▲" : "▼";
+        }
+        
+        let clearBtn = "";
+        if (activeFilters[k] && activeFilters[k].length > 0) {
+            clearBtn = ` <span style="color:#e74c3c; cursor:pointer; font-weight:bold; margin-left:6px;" onclick="window.clearItinerarioFilter(event, '${k}')" title="Limpiar filtro de esta columna">❌</span>`;
+        }
+
+        th.innerHTML = `${cols[k]} ${arrow}${clearBtn}`;
+    });
+}
+
+window.clearItinerarioFilter = (e, col) => {
+    e.stopPropagation();
+    activeFilters[col] = [];
+    filterHistory = filterHistory.filter(h => h.type !== col);
+    renderActiveFilterChips();
+    updateHeaderLabels();
+    filterStages();
+};
+
+function renderActiveFilterChips() {
+    const bar = document.getElementById("active-filters-chips-bar");
+    if (!bar) return;
+
+    // Sync active filters to history
+    Object.keys(activeFilters).forEach(col => {
+        activeFilters[col].forEach(val => {
+            if (!val) return;
+            filterHistory = filterHistory.filter(h => !(h.type === col && h.name === val));
+            filterHistory.unshift({ type: col, name: val });
+        });
+    });
+
+    // Limit to 4
+    if (filterHistory.length > 4) {
+        filterHistory = filterHistory.slice(0, 4);
+    }
+
+    if (filterHistory.length === 0) {
+        bar.style.display = "none";
+        return;
+    }
+
+    bar.innerHTML = "";
+    bar.style.display = "flex";
+
+    filterHistory.forEach(item => {
+        const isActive = activeFilters[item.type].includes(item.name);
+        const chip = document.createElement("span");
+        
+        if (isActive) {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:600; color:#475569; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px;";
+            chip.innerHTML = `${item.name} <span style="color:#ef4444; font-weight:bold; font-size:0.75rem; margin-left:2px;">&times;</span>`;
+            chip.title = "Remover filtro";
+        } else {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:500; color:#94a3b8; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px; opacity:0.75;";
+            chip.innerHTML = `${item.name}`;
+            chip.title = "Re-aplicar este filtro";
+        }
+
+        chip.addEventListener("click", () => {
+            if (isActive) {
+                activeFilters[item.type] = activeFilters[item.type].filter(val => val !== item.name);
+            } else {
+                activeFilters[item.type].push(item.name);
+            }
+            renderActiveFilterChips();
+            updateHeaderLabels();
+            filterStages();
+        });
+        bar.appendChild(chip);
+    });
 }
 
 async function saveStage() {
@@ -235,7 +398,6 @@ async function saveStage() {
             showAlert("✅ Etapa registrada.", "success");
         }
 
-        // Set the filter select value to the saved reality to let user see it immediately
         filterRealidad.value = realidadId;
         updatePageTitle();
 
@@ -287,4 +449,130 @@ function resetForm() {
     formTitle.textContent = "📝 Registrar Etapa de Itinerario";
     btnCancel.style.display = "none";
     btnSave.textContent = "💾 Guardar Etapa";
+}
+
+// ── Excel-style Column right click filtering ─────
+const efMenu = document.getElementById("excel-filter-menu");
+const efClose = document.getElementById("ef-close");
+const efSearch = document.getElementById("ef-search");
+const efList = document.getElementById("ef-list");
+const efBtnCancel = document.getElementById("ef-btn-cancel");
+const efBtnApply = document.getElementById("ef-btn-apply");
+
+let efCurrentColumn = "";
+let efCurrentValues = [];
+
+function setupColumnRightClickFilters() {
+    const cols = ["nombre", "detalle", "otros"];
+    
+    cols.forEach(k => {
+        const th = document.getElementById(`th-${k}`);
+        if (!th) return;
+        
+        th.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            openExcelFilter(k, e.clientX, e.clientY);
+        });
+    });
+
+    if (efSearch) efSearch.addEventListener("input", renderExcelFilterList);
+    if (efClose) efClose.addEventListener("click", () => efMenu.style.display = "none");
+    if (efBtnCancel) efBtnCancel.addEventListener("click", () => efMenu.style.display = "none");
+    if (efBtnApply) efBtnApply.addEventListener("click", applyExcelFilter);
+
+    document.addEventListener("click", (e) => {
+        if (efMenu && efMenu.style.display === "block" && !efMenu.contains(e.target)) {
+            if (!e.target.closest("th")) {
+                efMenu.style.display = "none";
+            }
+        }
+    });
+}
+
+function openExcelFilter(colKey, clientX, clientY) {
+    efCurrentColumn = colKey;
+    efMenu.style.left = `${clientX}px`;
+    efMenu.style.top = `${clientY}px`;
+    efMenu.style.display = "block";
+    efSearch.value = "";
+
+    const uniqueVals = new Set();
+    
+    const activeRealidadId = filterRealidad.value;
+    const currentRealidadStages = allStages.filter(s => {
+        if (!s.realidadId && activeRealidadId === defaultRealidadId) return true;
+        return s.realidadId === activeRealidadId;
+    });
+
+    currentRealidadStages.forEach(s => {
+        let val = s[colKey] || "—";
+        uniqueVals.add(val);
+    });
+
+    efCurrentValues = Array.from(uniqueVals).sort((a, b) => String(a).localeCompare(String(b)));
+    renderExcelFilterList();
+}
+
+function renderExcelFilterList() {
+    const q = efSearch.value.toLowerCase().trim();
+    efList.innerHTML = "";
+
+    const allChecked = activeFilters[efCurrentColumn].length === 0 || efCurrentValues.every(val => activeFilters[efCurrentColumn].includes(val));
+    
+    const selectAllItem = document.createElement("label");
+    selectAllItem.className = "ef-item";
+    selectAllItem.style.cssText = "display:flex; align-items:center; gap:6px; font-weight:bold; margin-bottom:4px; cursor:pointer;";
+    selectAllItem.innerHTML = `
+        <input type="checkbox" id="ef-select-all" ${allChecked ? "checked" : ""}>
+        <span>(Seleccionar todo)</span>
+    `;
+    efList.appendChild(selectAllItem);
+
+    const selectAllCheckbox = selectAllItem.querySelector("#ef-select-all");
+    selectAllCheckbox.addEventListener("change", () => {
+        const boxes = efList.querySelectorAll(".ef-val-check");
+        boxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+    });
+
+    efCurrentValues.forEach(val => {
+        if (q && !String(val).toLowerCase().includes(q)) return;
+
+        const isChecked = activeFilters[efCurrentColumn].length === 0 || activeFilters[efCurrentColumn].includes(val);
+        const item = document.createElement("label");
+        item.style.cssText = "display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;";
+        item.innerHTML = `
+            <input type="checkbox" class="ef-val-check" value="${val}" ${isChecked ? "checked" : ""}>
+            <span>${val}</span>
+        `;
+        
+        const cb = item.querySelector("input");
+        cb.addEventListener("change", () => {
+            if (!cb.checked) {
+                selectAllCheckbox.checked = false;
+            } else {
+                const allSingleChecked = Array.from(efList.querySelectorAll(".ef-val-check")).every(c => c.checked);
+                selectAllCheckbox.checked = allSingleChecked;
+            }
+        });
+
+        efList.appendChild(item);
+    });
+}
+
+function applyExcelFilter() {
+    const selected = [];
+    const checks = efList.querySelectorAll(".ef-val-check");
+    checks.forEach(cb => {
+        if (cb.checked) selected.push(cb.value);
+    });
+
+    if (selected.length === efCurrentValues.length || selected.length === 0) {
+        activeFilters[efCurrentColumn] = [];
+    } else {
+        activeFilters[efCurrentColumn] = selected;
+    }
+
+    efMenu.style.display = "none";
+    updateHeaderLabels();
+    filterStages();
 }

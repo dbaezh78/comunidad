@@ -57,6 +57,11 @@ let cachedParroquias     = {};        // parroquiaId -> nombre
 let todasComunidades     = [];        // all communities in system
 let isCreatingNew        = false;
 
+let currentSortColumn   = "parroquiaNombre";
+let currentSortDir      = "asc";
+let activeFilters       = { parroquiaNombre: [], numero: [], etapaNombre: [], catequistaNombre: [] };
+let filterHistory       = [];
+
 const NUMS_RESP = ["","1ro","2do","3ro","4to","5to","6to","7mo","8vo"];
 
 // ── App ready ────────────────────────────────────
@@ -65,10 +70,11 @@ window.addEventListener("app:ready", async () => {
     await loadItinerarios();
     await loadAllComunidades();
     setupCatequistaSelectors();
+    setupSortingListeners();
 
     const searchInput = document.getElementById("search-comunidades");
     if (searchInput) {
-        searchInput.addEventListener("input", filterComunidades);
+        searchInput.addEventListener("input", () => filterComunidades());
     }
 });
 
@@ -783,42 +789,58 @@ async function loadAllComunidades() {
             });
         });
 
-        // Ordenar por nombre de Parroquia y luego por número de Comunidad
-        todasComunidades.sort((a, b) => {
-            const pComp = a.parroquiaNombre.localeCompare(b.parroquiaNombre);
-            if (pComp !== 0) return pComp;
-            return String(a.numero).localeCompare(String(b.numero), undefined, {numeric: true});
-        });
-
+        // sorting is done inside filterComunidades
         renderComunidadesTable(todasComunidades);
     } catch(e) {
         console.error("Error al cargar listado de comunidades:", e);
     }
 }
 
-function renderComunidadesTable(lista) {
+function renderComunidadesTable(lista, isFilteredCall = false) {
+    if (!isFilteredCall) {
+        filterComunidades();
+        return;
+    }
+
     const tbody = document.getElementById("comunidad-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
 
     if (lista.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:15px; color:#999;">No se encontraron comunidades.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#999;">No se encontraron comunidades.</td></tr>';
         return;
     }
 
     lista.forEach(c => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td><strong>${c.parroquiaNombre}</strong></td>
-            <td>Comunidad ${c.numero}</td>
-            <td><span class="badge-rol badge-hno" style="text-transform:capitalize;">${c.tipo || "Normal"}</span></td>
-            <td><span style="font-weight:600; color:#475569;">${c.etapaNombre || "—"}</span></td>
-            <td>${c.catequistaNombre ? `${c.catequistaNombre} ${c.catequistaTelefono ? `(${c.catequistaTelefono})` : ""}` : "—"}</td>
+            <td><strong class="click-filter" data-col="parroquiaNombre" style="cursor:pointer; color:var(--primary);">${c.parroquiaNombre}</strong></td>
+            <td><span class="click-filter" data-col="numero" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">Comunidad ${c.numero}</span></td>
+            <td><span class="click-filter" data-col="etapaNombre" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted; font-weight:600; color:#475569;">${c.etapaNombre || "—"}</span></td>
+            <td><span class="click-filter" data-col="catequistaNombre" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${c.catequistaNombre || "—"}</span></td>
             <td style="text-align:center;">
                 <button class="btn btn-sm btn-outline btn-edit-table" data-id="${c.id}">✏️</button>
                 <button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${c.id}">✕</button>
             </td>
         `;
+
+        tr.querySelectorAll(".click-filter").forEach(el => {
+            el.addEventListener("click", () => {
+                const col = el.dataset.col;
+                let val = el.textContent.trim();
+                if (col === "numero") val = val.replace("Comunidad ", "");
+                if (val && val !== "—") {
+                    if (!activeFilters[col].includes(val)) {
+                        activeFilters[col].push(val);
+                    } else {
+                        activeFilters[col] = activeFilters[col].filter(v => v !== val);
+                    }
+                    renderActiveFilterChips();
+                    updateHeaderLabels();
+                    filterComunidades();
+                }
+            });
+        });
 
         tr.querySelector(".btn-edit-table").addEventListener("click", () => {
             selectAndEditCommunity(c);
@@ -833,7 +855,6 @@ function renderComunidadesTable(lista) {
             if (!confirmDelete) return;
 
             try {
-                // Desvincular hermanos
                 const hSnap = await getDocs(query(collection(db, "hermanos"), where("comunidadId", "==", c.id)));
                 const batch = [];
                 hSnap.forEach(hd => {
@@ -854,7 +875,6 @@ function renderComunidadesTable(lista) {
                     selComunidad.value = "";
                 }
 
-                // Quitar del selector si está cargado
                 const opt = selComunidad.querySelector(`option[value="${c.id}"]`);
                 if (opt) opt.remove();
 
@@ -871,19 +891,169 @@ function renderComunidadesTable(lista) {
 
 function filterComunidades() {
     const q = document.getElementById("search-comunidades").value.toLowerCase().trim();
-    if (!q) {
-        renderComunidadesTable(todasComunidades);
+    
+    let filtered = [...todasComunidades];
+
+    // Apply active filter chips
+    if (activeFilters.parroquiaNombre.length > 0) {
+        filtered = filtered.filter(c => activeFilters.parroquiaNombre.includes(c.parroquiaNombre));
+    }
+    if (activeFilters.numero.length > 0) {
+        filtered = filtered.filter(c => activeFilters.numero.includes(String(c.numero)));
+    }
+    if (activeFilters.etapaNombre.length > 0) {
+        filtered = filtered.filter(c => activeFilters.etapaNombre.includes(c.etapaNombre));
+    }
+    if (activeFilters.catequistaNombre.length > 0) {
+        filtered = filtered.filter(c => activeFilters.catequistaNombre.includes(c.catequistaNombre));
+    }
+
+    // Apply text search
+    if (q) {
+        filtered = filtered.filter(c => {
+            const pNom = (c.parroquiaNombre || "").toLowerCase();
+            const cNum = `comunidad ${c.numero}`.toLowerCase();
+            const cEtapa = (c.etapaNombre || "").toLowerCase();
+            const cCat = (c.catequistaNombre || "").toLowerCase();
+            return pNom.includes(q) || cNum.includes(q) || cEtapa.includes(q) || cCat.includes(q);
+        });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+        let valA = a[currentSortColumn] || "";
+        let valB = b[currentSortColumn] || "";
+
+        if (currentSortColumn === "numero") {
+            return currentSortDir === "asc" ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+        }
+        
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+
+        if (valA < valB) return currentSortDir === "asc" ? -1 : 1;
+        if (valA > valB) return currentSortDir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    renderComunidadesTable(filtered, true);
+}
+
+function setupSortingListeners() {
+    const headers = ["parroquia", "numero", "etapa", "catequista"];
+    headers.forEach(h => {
+        const th = document.getElementById(`th-${h}`);
+        if (th) {
+            th.addEventListener("click", () => {
+                let key = h;
+                if (h === "parroquia") key = "parroquiaNombre";
+                if (h === "etapa") key = "etapaNombre";
+                if (h === "catequista") key = "catequistaNombre";
+                handleSort(key);
+            });
+        }
+    });
+    setupColumnRightClickFilters();
+}
+
+function handleSort(col) {
+    if (currentSortColumn === col) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+    } else {
+        currentSortColumn = col;
+        currentSortDir = "asc";
+    }
+    updateHeaderLabels();
+    filterComunidades();
+}
+
+function updateHeaderLabels() {
+    const cols = {
+        "parroquia": { label: "Parroquia", key: "parroquiaNombre" },
+        "numero": { label: "No. Comunidad", key: "numero" },
+        "etapa": { label: "Etapa", key: "etapaNombre" },
+        "catequista": { label: "Catequista", key: "catequistaNombre" }
+    };
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-${k}`);
+        if (!th) return;
+        
+        const key = cols[k].key;
+        let arrow = "↕️";
+        if (key === currentSortColumn) {
+            arrow = currentSortDir === "asc" ? "▲" : "▼";
+        }
+        
+        let clearBtn = "";
+        if (activeFilters[key] && activeFilters[key].length > 0) {
+            clearBtn = ` <span style="color:#e74c3c; cursor:pointer; font-weight:bold; margin-left:6px;" onclick="window.clearComunidadFilter(event, '${key}')" title="Limpiar filtro de esta columna">❌</span>`;
+        }
+
+        th.innerHTML = `${cols[k].label} ${arrow}${clearBtn}`;
+    });
+}
+
+window.clearComunidadFilter = (e, col) => {
+    e.stopPropagation();
+    activeFilters[col] = [];
+    filterHistory = filterHistory.filter(h => h.type !== col);
+    renderActiveFilterChips();
+    updateHeaderLabels();
+    filterComunidades();
+};
+
+function renderActiveFilterChips() {
+    const bar = document.getElementById("active-filters-chips-bar");
+    if (!bar) return;
+
+    // Sync active filters to history
+    Object.keys(activeFilters).forEach(col => {
+        activeFilters[col].forEach(val => {
+            if (!val) return;
+            filterHistory = filterHistory.filter(h => !(h.type === col && h.name === val));
+            filterHistory.unshift({ type: col, name: val });
+        });
+    });
+
+    // Limit to 4
+    if (filterHistory.length > 4) {
+        filterHistory = filterHistory.slice(0, 4);
+    }
+
+    if (filterHistory.length === 0) {
+        bar.style.display = "none";
         return;
     }
 
-    const filtered = todasComunidades.filter(c => {
-        const pNom = (c.parroquiaNombre || "").toLowerCase();
-        const cNum = `comunidad ${c.numero}`.toLowerCase();
-        const cEtapa = (c.etapaNombre || "").toLowerCase();
-        const cCat = (c.catequistaNombre || "").toLowerCase();
-        return pNom.includes(q) || cNum.includes(q) || cEtapa.includes(q) || cCat.includes(q);
+    bar.innerHTML = "";
+    bar.style.display = "flex";
+
+    filterHistory.forEach(item => {
+        const isActive = activeFilters[item.type].includes(item.name);
+        const chip = document.createElement("span");
+        
+        if (isActive) {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:600; color:#475569; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px;";
+            chip.innerHTML = `${item.type === 'numero' ? 'Comunidad ' : ''}${item.name} <span style="color:#ef4444; font-weight:bold; font-size:0.75rem; margin-left:2px;">&times;</span>`;
+            chip.title = "Remover filtro";
+        } else {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:500; color:#94a3b8; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px; opacity:0.75;";
+            chip.innerHTML = `${item.type === 'numero' ? 'Comunidad ' : ''}${item.name}`;
+            chip.title = "Re-aplicar este filtro";
+        }
+
+        chip.addEventListener("click", () => {
+            if (isActive) {
+                activeFilters[item.type] = activeFilters[item.type].filter(val => val !== item.name);
+            } else {
+                activeFilters[item.type].push(item.name);
+            }
+            renderActiveFilterChips();
+            updateHeaderLabels();
+            filterComunidades();
+        });
+        bar.appendChild(chip);
     });
-    renderComunidadesTable(filtered);
 }
 
 async function loadComunidadesDropdownForParroquia(pid) {
@@ -911,4 +1081,130 @@ async function selectAndEditCommunity(c) {
     if (!editing) {
         btnToggleDatos.click();
     }
+}
+
+// ── Excel-style Column right click filtering ─────
+const efMenu = document.getElementById("excel-filter-menu");
+const efClose = document.getElementById("ef-close");
+const efSearch = document.getElementById("ef-search");
+const efList = document.getElementById("ef-list");
+const efBtnCancel = document.getElementById("ef-btn-cancel");
+const efBtnApply = document.getElementById("ef-btn-apply");
+
+let efCurrentColumn = "";
+let efCurrentValues = [];
+
+function setupColumnRightClickFilters() {
+    const cols = ["parroquiaNombre", "numero", "etapaNombre", "catequistaNombre"];
+    
+    const elementIds = {
+        "parroquiaNombre": "parroquia",
+        "numero": "numero",
+        "etapaNombre": "etapa",
+        "catequistaNombre": "catequista"
+    };
+
+    Object.keys(elementIds).forEach(k => {
+        const th = document.getElementById(`th-${elementIds[k]}`);
+        if (!th) return;
+        
+        th.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            openExcelFilter(k, e.clientX, e.clientY);
+        });
+    });
+
+    if (efSearch) efSearch.addEventListener("input", renderExcelFilterList);
+    if (efClose) efClose.addEventListener("click", () => efMenu.style.display = "none");
+    if (efBtnCancel) efBtnCancel.addEventListener("click", () => efMenu.style.display = "none");
+    if (efBtnApply) efBtnApply.addEventListener("click", applyExcelFilter);
+
+    document.addEventListener("click", (e) => {
+        if (efMenu && efMenu.style.display === "block" && !efMenu.contains(e.target)) {
+            if (!e.target.closest("th")) {
+                efMenu.style.display = "none";
+            }
+        }
+    });
+}
+
+function openExcelFilter(colKey, clientX, clientY) {
+    efCurrentColumn = colKey;
+    efMenu.style.left = `${clientX}px`;
+    efMenu.style.top = `${clientY}px`;
+    efMenu.style.display = "block";
+    efSearch.value = "";
+
+    const uniqueVals = new Set();
+    todasComunidades.forEach(c => {
+        let val = c[colKey] || "—";
+        uniqueVals.add(val);
+    });
+
+    efCurrentValues = Array.from(uniqueVals).sort((a, b) => String(a).localeCompare(String(b)));
+    renderExcelFilterList();
+}
+
+function renderExcelFilterList() {
+    const q = efSearch.value.toLowerCase().trim();
+    efList.innerHTML = "";
+
+    const allChecked = activeFilters[efCurrentColumn].length === 0 || efCurrentValues.every(val => activeFilters[efCurrentColumn].includes(val));
+    
+    const selectAllItem = document.createElement("label");
+    selectAllItem.className = "ef-item";
+    selectAllItem.style.cssText = "display:flex; align-items:center; gap:6px; font-weight:bold; margin-bottom:4px; cursor:pointer;";
+    selectAllItem.innerHTML = `
+        <input type="checkbox" id="ef-select-all" ${allChecked ? "checked" : ""}>
+        <span>(Seleccionar todo)</span>
+    `;
+    efList.appendChild(selectAllItem);
+
+    const selectAllCheckbox = selectAllItem.querySelector("#ef-select-all");
+    selectAllCheckbox.addEventListener("change", () => {
+        const boxes = efList.querySelectorAll(".ef-val-check");
+        boxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+    });
+
+    efCurrentValues.forEach(val => {
+        if (q && !String(val).toLowerCase().includes(q)) return;
+
+        const isChecked = activeFilters[efCurrentColumn].length === 0 || activeFilters[efCurrentColumn].includes(val);
+        const item = document.createElement("label");
+        item.style.cssText = "display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;";
+        item.innerHTML = `
+            <input type="checkbox" class="ef-val-check" value="${val}" ${isChecked ? "checked" : ""}>
+            <span>${efCurrentColumn === 'numero' ? 'Comunidad ' : ''}${val}</span>
+        `;
+        
+        const cb = item.querySelector("input");
+        cb.addEventListener("change", () => {
+            if (!cb.checked) {
+                selectAllCheckbox.checked = false;
+            } else {
+                const allSingleChecked = Array.from(efList.querySelectorAll(".ef-val-check")).every(c => c.checked);
+                selectAllCheckbox.checked = allSingleChecked;
+            }
+        });
+
+        efList.appendChild(item);
+    });
+}
+
+function applyExcelFilter() {
+    const selected = [];
+    const checks = efList.querySelectorAll(".ef-val-check");
+    checks.forEach(cb => {
+        if (cb.checked) selected.push(cb.value);
+    });
+
+    if (selected.length === efCurrentValues.length || selected.length === 0) {
+        activeFilters[efCurrentColumn] = [];
+    } else {
+        activeFilters[efCurrentColumn] = selected;
+    }
+
+    efMenu.style.display = "none";
+    updateHeaderLabels();
+    filterComunidades();
 }

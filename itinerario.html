@@ -97,13 +97,14 @@
                 <input type="text" id="search-itinerario" placeholder="Buscar etapa..." style="width:250px; padding:6px; font-size:0.82rem; border-radius:4px; border:1px solid #ccc;">
             </div>
             
+            <div id="active-filters-chips-bar" style="display:none; flex-wrap:wrap; gap:8px; margin-bottom:12px; font-family:'Segoe UI',sans-serif; font-size:0.85rem; align-items:center;"></div>
             <div style="overflow-x:auto; margin-top:15px;">
                 <table class="hermanos-table">
                     <thead>
                         <tr>
-                            <th>Nombre de la Etapa</th>
-                            <th>Detalle / Descripción</th>
-                            <th>Otros</th>
+                            <th id="th-nombre" style="cursor:pointer; user-select:none;">Nombre de la Etapa ↕️</th>
+                            <th id="th-detalle" style="cursor:pointer; user-select:none;">Detalle / Descripción ↕️</th>
+                            <th id="th-otros" style="cursor:pointer; user-select:none;">Otros ↕️</th>
                             <th style="text-align:center; width:120px;">Acciones</th>
                         </tr>
                     </thead>
@@ -114,6 +115,20 @@
             </div>
         </div>
 
+    </div>
+</div>
+
+<!-- Excel-style Column Filter Menu -->
+<div id="excel-filter-menu" class="excel-filter-menu" style="display:none; position:fixed; background:white; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000; padding:12px; width:220px; font-family:'Segoe UI',sans-serif;">
+    <div style="font-weight:bold; margin-bottom:8px; font-size:0.85rem; color:var(--primary); display:flex; justify-content:space-between; align-items:center;">
+        <span>Filtrar valores</span>
+        <button id="ef-close" style="background:none; border:none; cursor:pointer; font-size:1.2rem; line-height:1; color:#888; font-weight:bold;">&times;</button>
+    </div>
+    <input type="text" id="ef-search" placeholder="Buscar..." style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:0.8rem; box-sizing:border-box; margin-bottom:8px; outline:none;">
+    <div id="ef-list" style="max-height:150px; overflow-y:auto; border:1px solid #eee; padding:6px; border-radius:4px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px; font-size:0.82rem; max-width:100%; box-sizing:border-box;"></div>
+    <div style="display:flex; justify-content:flex-end; gap:6px;">
+        <button id="ef-btn-cancel" class="btn btn-sm btn-outline" style="padding:4px 8px; font-size:0.75rem;">Cancelar</button>
+        <button id="ef-btn-apply" class="btn btn-sm btn-primary" style="padding:4px 8px; font-size:0.75rem;">Aplicar</button>
     </div>
 </div>
 

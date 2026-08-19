@@ -53,14 +53,20 @@ let todasRealidades     = [];    // docs de Firestore
 let todasParroquias     = [];
 let editingParroquiaId  = null;
 
+let currentSortColumn   = "nombre";
+let currentSortDir      = "asc";
+let activeFilters       = { nombre: [], parroco: [], telefono: [], direccion: [] };
+let filterHistory       = [];
+
 // ── App ready ────────────────────────────────────
 window.addEventListener("app:ready", async () => {
     await loadRealidades();
     await loadParroquias();
+    setupSortingListeners();
     
     const searchInput = document.getElementById("search-parroquias");
     if (searchInput) {
-        searchInput.addEventListener("input", filterParroquias);
+        searchInput.addEventListener("input", () => filterParroquias());
     }
 });
 
@@ -334,7 +340,12 @@ function showAlert(msg, type = "info") {
     if (type === "success") setTimeout(() => { globalAlert.className = "alert"; }, 3500);
 }
 
-function renderParroquiasTable(lista) {
+function renderParroquiasTable(lista, isFilteredCall = false) {
+    if (!isFilteredCall) {
+        filterParroquias();
+        return;
+    }
+
     const tbody = document.getElementById("parroquia-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
@@ -347,15 +358,32 @@ function renderParroquiasTable(lista) {
     lista.forEach(p => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td><strong>${p.nombre}</strong></td>
-            <td>${p.parroco || "—"}</td>
-            <td>${p.telefono || "—"}</td>
-            <td>${p.direccion || "—"}</td>
+            <td><strong class="click-filter" data-col="nombre" style="cursor:pointer; color:var(--primary);">${p.nombre}</strong></td>
+            <td><span class="click-filter" data-col="parroco" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.parroco || "—"}</span></td>
+            <td><span class="click-filter" data-col="telefono" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.telefono || "—"}</span></td>
+            <td><span class="click-filter" data-col="direccion" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.direccion || "—"}</span></td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit-table" data-id="${p.id}">✏️ Editar</button>
+                <button class="btn btn-sm btn-outline btn-edit-table" data-id="${p.id}">✏️</button>
                 <button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${p.id}">✕</button>
             </td>
         `;
+
+        tr.querySelectorAll(".click-filter").forEach(el => {
+            el.addEventListener("click", () => {
+                const col = el.dataset.col;
+                const val = el.textContent.trim();
+                if (val && val !== "—") {
+                    if (!activeFilters[col].includes(val)) {
+                        activeFilters[col].push(val);
+                    } else {
+                        activeFilters[col] = activeFilters[col].filter(v => v !== val);
+                    }
+                    renderActiveFilterChips();
+                    updateHeaderLabels();
+                    filterParroquias();
+                }
+            });
+        });
 
         tr.querySelector(".btn-edit-table").addEventListener("click", () => {
             selParroquia.value = p.id;
@@ -372,18 +400,157 @@ function renderParroquiasTable(lista) {
 
 function filterParroquias() {
     const q = document.getElementById("search-parroquias").value.toLowerCase().trim();
-    if (!q) {
-        renderParroquiasTable(todasParroquias);
+    
+    let filtered = [...todasParroquias];
+
+    // Apply active filter chips
+    if (activeFilters.nombre.length > 0) {
+        filtered = filtered.filter(p => activeFilters.nombre.includes(p.nombre));
+    }
+    if (activeFilters.parroco.length > 0) {
+        filtered = filtered.filter(p => activeFilters.parroco.includes(p.parroco));
+    }
+    if (activeFilters.telefono.length > 0) {
+        filtered = filtered.filter(p => activeFilters.telefono.includes(p.telefono));
+    }
+    if (activeFilters.direccion.length > 0) {
+        filtered = filtered.filter(p => activeFilters.direccion.includes(p.direccion));
+    }
+
+    // Apply text search
+    if (q) {
+        filtered = filtered.filter(p => {
+            const nom = (p.nombre || "").toLowerCase();
+            const pr = (p.parroco || "").toLowerCase();
+            const dir = (p.direccion || "").toLowerCase();
+            return nom.includes(q) || pr.includes(q) || dir.includes(q);
+        });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+        let valA = a[currentSortColumn] || "";
+        let valB = b[currentSortColumn] || "";
+        
+        valA = String(valA).toLowerCase();
+        valB = String(valB).toLowerCase();
+
+        if (valA < valB) return currentSortDir === "asc" ? -1 : 1;
+        if (valA > valB) return currentSortDir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    renderParroquiasTable(filtered, true);
+}
+
+function setupSortingListeners() {
+    const headers = ["nombre", "parroco", "telefono", "direccion"];
+    headers.forEach(h => {
+        const th = document.getElementById(`th-${h}`);
+        if (th) {
+            th.addEventListener("click", () => handleSort(h));
+        }
+    });
+    setupColumnRightClickFilters();
+}
+
+function handleSort(col) {
+    if (currentSortColumn === col) {
+        currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+    } else {
+        currentSortColumn = col;
+        currentSortDir = "asc";
+    }
+    updateHeaderLabels();
+    filterParroquias();
+}
+
+function updateHeaderLabels() {
+    const cols = {
+        "nombre": "Nombre de la Parroquia",
+        "parroco": "Párroco",
+        "telefono": "Teléfono",
+        "direccion": "Dirección"
+    };
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-${k}`);
+        if (!th) return;
+        
+        let arrow = "↕️";
+        if (k === currentSortColumn) {
+            arrow = currentSortDir === "asc" ? "▲" : "▼";
+        }
+        
+        let clearBtn = "";
+        if (activeFilters[k] && activeFilters[k].length > 0) {
+            clearBtn = ` <span style="color:#e74c3c; cursor:pointer; font-weight:bold; margin-left:6px;" onclick="window.clearParroquiaFilter(event, '${k}')" title="Limpiar filtro de esta columna">❌</span>`;
+        }
+
+        th.innerHTML = `${cols[k]} ${arrow}${clearBtn}`;
+    });
+}
+
+window.clearParroquiaFilter = (e, col) => {
+    e.stopPropagation();
+    activeFilters[col] = [];
+    filterHistory = filterHistory.filter(h => h.type !== col);
+    renderActiveFilterChips();
+    updateHeaderLabels();
+    filterParroquias();
+};
+
+function renderActiveFilterChips() {
+    const bar = document.getElementById("active-filters-chips-bar");
+    if (!bar) return;
+
+    // Sync active filters to history
+    Object.keys(activeFilters).forEach(col => {
+        activeFilters[col].forEach(val => {
+            if (!val) return;
+            filterHistory = filterHistory.filter(h => !(h.type === col && h.name === val));
+            filterHistory.unshift({ type: col, name: val });
+        });
+    });
+
+    // Limit to 4
+    if (filterHistory.length > 4) {
+        filterHistory = filterHistory.slice(0, 4);
+    }
+
+    if (filterHistory.length === 0) {
+        bar.style.display = "none";
         return;
     }
 
-    const filtered = todasParroquias.filter(p => {
-        const nom = (p.nombre || "").toLowerCase();
-        const pr = (p.parroco || "").toLowerCase();
-        const dir = (p.direccion || "").toLowerCase();
-        return nom.includes(q) || pr.includes(q) || dir.includes(q);
+    bar.innerHTML = "";
+    bar.style.display = "flex";
+
+    filterHistory.forEach(item => {
+        const isActive = activeFilters[item.type].includes(item.name);
+        const chip = document.createElement("span");
+        
+        if (isActive) {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:600; color:#475569; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px;";
+            chip.innerHTML = `${item.name} <span style="color:#ef4444; font-weight:bold; font-size:0.75rem; margin-left:2px;">&times;</span>`;
+            chip.title = "Remover filtro";
+        } else {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:500; color:#94a3b8; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px; opacity:0.75;";
+            chip.innerHTML = `${item.name}`;
+            chip.title = "Re-aplicar este filtro";
+        }
+
+        chip.addEventListener("click", () => {
+            if (isActive) {
+                activeFilters[item.type] = activeFilters[item.type].filter(val => val !== item.name);
+            } else {
+                activeFilters[item.type].push(item.name);
+            }
+            renderActiveFilterChips();
+            updateHeaderLabels();
+            filterParroquias();
+        });
+        bar.appendChild(chip);
     });
-    renderParroquiasTable(filtered);
 }
 
 async function deleteParroquiaById(id) {
@@ -417,5 +584,124 @@ async function deleteParroquiaById(id) {
     } catch (err) {
         showAlert("Error: " + err.message, "error");
     }
+}
+
+// ── Excel-style Column right click filtering ─────
+const efMenu = document.getElementById("excel-filter-menu");
+const efClose = document.getElementById("ef-close");
+const efSearch = document.getElementById("ef-search");
+const efList = document.getElementById("ef-list");
+const efBtnCancel = document.getElementById("ef-btn-cancel");
+const efBtnApply = document.getElementById("ef-btn-apply");
+
+let efCurrentColumn = "";
+let efCurrentValues = [];
+
+function setupColumnRightClickFilters() {
+    const cols = ["nombre", "parroco", "telefono", "direccion"];
+    
+    cols.forEach(k => {
+        const th = document.getElementById(`th-${k}`);
+        if (!th) return;
+        
+        th.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            openExcelFilter(k, e.clientX, e.clientY);
+        });
+    });
+
+    if (efSearch) efSearch.addEventListener("input", renderExcelFilterList);
+    if (efClose) efClose.addEventListener("click", () => efMenu.style.display = "none");
+    if (efBtnCancel) efBtnCancel.addEventListener("click", () => efMenu.style.display = "none");
+    if (efBtnApply) efBtnApply.addEventListener("click", applyExcelFilter);
+
+    document.addEventListener("click", (e) => {
+        if (efMenu && efMenu.style.display === "block" && !efMenu.contains(e.target)) {
+            if (!e.target.closest("th")) {
+                efMenu.style.display = "none";
+            }
+        }
+    });
+}
+
+function openExcelFilter(colKey, clientX, clientY) {
+    efCurrentColumn = colKey;
+    efMenu.style.left = `${clientX}px`;
+    efMenu.style.top = `${clientY}px`;
+    efMenu.style.display = "block";
+    efSearch.value = "";
+
+    const uniqueVals = new Set();
+    todasParroquias.forEach(p => {
+        let val = p[colKey] || "—";
+        uniqueVals.add(val);
+    });
+
+    efCurrentValues = Array.from(uniqueVals).sort((a, b) => String(a).localeCompare(String(b)));
+    renderExcelFilterList();
+}
+
+function renderExcelFilterList() {
+    const q = efSearch.value.toLowerCase().trim();
+    efList.innerHTML = "";
+
+    const allChecked = activeFilters[efCurrentColumn].length === 0 || efCurrentValues.every(val => activeFilters[efCurrentColumn].includes(val));
+    
+    const selectAllItem = document.createElement("label");
+    selectAllItem.className = "ef-item";
+    selectAllItem.style.cssText = "display:flex; align-items:center; gap:6px; font-weight:bold; margin-bottom:4px; cursor:pointer;";
+    selectAllItem.innerHTML = `
+        <input type="checkbox" id="ef-select-all" ${allChecked ? "checked" : ""}>
+        <span>(Seleccionar todo)</span>
+    `;
+    efList.appendChild(selectAllItem);
+
+    const selectAllCheckbox = selectAllItem.querySelector("#ef-select-all");
+    selectAllCheckbox.addEventListener("change", () => {
+        const boxes = efList.querySelectorAll(".ef-val-check");
+        boxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+    });
+
+    efCurrentValues.forEach(val => {
+        if (q && !String(val).toLowerCase().includes(q)) return;
+
+        const isChecked = activeFilters[efCurrentColumn].length === 0 || activeFilters[efCurrentColumn].includes(val);
+        const item = document.createElement("label");
+        item.style.cssText = "display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;";
+        item.innerHTML = `
+            <input type="checkbox" class="ef-val-check" value="${val}" ${isChecked ? "checked" : ""}>
+            <span>${val}</span>
+        `;
+        
+        const cb = item.querySelector("input");
+        cb.addEventListener("change", () => {
+            if (!cb.checked) {
+                selectAllCheckbox.checked = false;
+            } else {
+                const allSingleChecked = Array.from(efList.querySelectorAll(".ef-val-check")).every(c => c.checked);
+                selectAllCheckbox.checked = allSingleChecked;
+            }
+        });
+
+        efList.appendChild(item);
+    });
+}
+
+function applyExcelFilter() {
+    const selected = [];
+    const checks = efList.querySelectorAll(".ef-val-check");
+    checks.forEach(cb => {
+        if (cb.checked) selected.push(cb.value);
+    });
+
+    if (selected.length === efCurrentValues.length || selected.length === 0) {
+        activeFilters[efCurrentColumn] = [];
+    } else {
+        activeFilters[efCurrentColumn] = selected;
+    }
+
+    efMenu.style.display = "none";
+    updateHeaderLabels();
+    filterParroquias();
 }
 
