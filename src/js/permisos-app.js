@@ -50,8 +50,7 @@ const gruposTbody     = document.getElementById("grupos-tbody");
 const selectPermisosGrupo = document.getElementById("select-grupo");
 const chkAdminTotal   = document.getElementById("chk-admin-total");
 const btnSavePermisos = document.getElementById("btn-save-permisos");
-const permisosLista   = document.getElementById("permisos-lista");
-const rowsPermisos    = document.querySelectorAll(".permiso-row[data-page]");
+const permisosTree    = document.getElementById("permisos-tree");
 
 // DOM - Uso App Pane
 const searchUso       = document.getElementById("search-uso");
@@ -101,6 +100,10 @@ window.addEventListener("app:ready", async (e) => {
     selectPermisosGrupo.addEventListener("change", loadGroupPermissions);
     chkAdminTotal.addEventListener("change", toggleAdminTotal);
     btnSavePermisos.addEventListener("click", savePermissions);
+
+    // Render permissions tree structure
+    renderPermissionsTreeMarkup();
+    enforcePermissions();
 
     // Bind Uso App filters
     searchUso.addEventListener("input", filterUsoLogs);
@@ -237,23 +240,30 @@ function renderGruposTable() {
     gruposTbody.innerHTML = "";
     allGroups.forEach(g => {
         const isDefault = ["admin", "responsable", "hermano"].includes(g.id);
+        const hasDeletePerm = window.hasPermission("permisos_acceso_grupos_eliminar");
         const deleteBtn = isDefault 
             ? `<span style="color:#aaa; font-size:0.8rem; font-style:italic;">Sistema</span>` 
-            : `<button class="btn btn-sm btn-outline btn-delete-grupo" style="color:red; border-color:#f5c6cb;" data-id="${g.id}">✕ Eliminar</button>`;
+            : (hasDeletePerm ? `<button class="btn btn-sm btn-outline btn-delete-grupo" style="color:red; border-color:#f5c6cb;" data-id="${g.id}">✕ Eliminar</button>` : "");
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td><strong>${g.id}</strong></td>
             <td>${g.nombre}</td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit-grupo" data-id="${g.id}">✏️ Editar</button>
+                ${window.hasPermission("permisos_acceso_grupos_editar") ? `<button class="btn btn-sm btn-outline btn-edit-grupo" data-id="${g.id}">✏️ Editar</button>` : ""}
                 ${deleteBtn}
             </td>
         `;
 
-        tr.querySelector(".btn-edit-grupo").addEventListener("click", () => editGrupo(g));
-        if (!isDefault) {
-            tr.querySelector(".btn-delete-grupo").addEventListener("click", () => deleteGrupo(g.id));
+        const btnEditG = tr.querySelector(".btn-edit-grupo");
+        if (btnEditG) {
+            btnEditG.addEventListener("click", () => editGrupo(g));
+        }
+        if (!isDefault && hasDeletePerm) {
+            const btnDelG = tr.querySelector(".btn-delete-grupo");
+            if (btnDelG) {
+                btnDelG.addEventListener("click", () => deleteGrupo(g.id));
+            }
         }
         gruposTbody.appendChild(tr);
     });
@@ -377,13 +387,19 @@ function renderUsersTable(lista) {
             <td>${rolStr}</td>
             <td>${estadoStr}</td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit-user" data-email="${u.correo}">✏️ Permisos</button>
-                <button class="btn btn-sm btn-outline btn-delete-user" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-email="${u.correo}">✕ Eliminar</button>
+                ${(window.hasPermission("permisos_acceso_miembros_editar_rol") || window.hasPermission("permisos_acceso_miembros_editar_suspender")) ? `<button class="btn btn-sm btn-outline btn-edit-user" data-email="${u.correo}">✏️ Permisos</button>` : ""}
+                ${window.hasPermission("permisos_acceso_miembros_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete-user" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-email="${u.correo}">✕ Eliminar</button>` : ""}
             </td>
         `;
 
-        tr.querySelector(".btn-edit-user").addEventListener("click", () => editUser(u));
-        tr.querySelector(".btn-delete-user").addEventListener("click", () => deleteUser(u.correo));
+        const btnEditU = tr.querySelector(".btn-edit-user");
+        if (btnEditU) {
+            btnEditU.addEventListener("click", () => editUser(u));
+        }
+        const btnDeleteU = tr.querySelector(".btn-delete-user");
+        if (btnDeleteU) {
+            btnDeleteU.addEventListener("click", () => deleteUser(u.correo));
+        }
         usersTbody.appendChild(tr);
     });
 }
@@ -464,7 +480,254 @@ function resetUserForm() {
     formUserCard.style.display = "none";
 }
 
-// ── SUBTAB: PERMISOS ───────────────────────────────
+// ── SUBTAB: PERMISOS (DYNAMIC DENDROGRAM/TREE VIEW) ──
+const PERMISSIONS_TREE = [
+  {
+    id: "parroquia",
+    label: "Parroquia",
+    children: [
+      { id: "parroquia_crear", label: "Crear Nueva parroquia" },
+      { id: "parroquia_consultar", label: "Seleccionar parroquia para consultar" },
+      { id: "parroquia_buscar", label: "Buscar en Parroquia" },
+      { id: "parroquia_filtrar", label: "Filtrar" },
+      { id: "parroquia_ver", label: "Ver datos de Parroquia" },
+      { id: "parroquia_editar", label: "Editar parroquia" },
+      { id: "parroquia_eliminar", label: "Eliminar Parroquia" }
+    ]
+  },
+  {
+    id: "catequista",
+    label: "Catequista",
+    children: [
+      { id: "catequista_ver_catequistas", label: "Ver Catequistas" },
+      { id: "catequista_ver_asignacion", label: "Ver asignacion catequista" },
+      { id: "catequista_guardar", label: "Guardar Asignacion" },
+      { id: "catequista_quitar", label: "Quitar Catequista" },
+      { id: "catequista_ver_hilos", label: "Expandir comunidades catequista" }
+    ]
+  },
+  {
+    id: "comunidad",
+    label: "Comunidad",
+    children: [
+      { id: "comunidad_consultar", label: "Consultar Comunidad" },
+      { id: "comunidad_crear", label: "+Nueva Comunidad" },
+      { id: "comunidad_buscar", label: "Hacer busqueda" },
+      { id: "comunidad_filtrar", label: "Filtrar" },
+      { id: "comunidad_editar", label: "Editar" },
+      { id: "comunidad_eliminar", label: "Eliminar" },
+      { id: "comunidad_generar_codigo", label: "Generar código único" },
+      { id: "comunidad_ver_hermanos", label: "Ver datos comunidad" }
+    ]
+  },
+  {
+    id: "hermanos",
+    label: "Hermanos",
+    children: [
+      { id: "hermanos_buscar", label: "Buscar" },
+      { id: "hermanos_crear", label: "Crear Nuevo Hermano" },
+      { id: "hermanos_ver", label: "Ver hermano creado" },
+      { id: "hermanos_editar", label: "Editar hermano creado" },
+      { id: "hermanos_eliminar", label: "Eliminar hermano Creado" },
+      { id: "hermanos_guardar", label: "Guardar Hermano creado o modificado" },
+      { id: "hermanos_cambiar_activo", label: "Cambiar de Activo a No Activo en edicion de hermano" }
+    ]
+  },
+  {
+    id: "realidad",
+    label: "Realidad",
+    children: [
+      { id: "realidad_ver", label: "Ver tarjeta de realidad" },
+      { id: "realidad_crear", label: "Crear Nueva Realidad" },
+      { id: "realidad_editar", label: "Editar" },
+      { id: "realidad_eliminar", label: "Eliminar" }
+    ]
+  },
+  {
+    id: "itinerario",
+    label: "Itinerario",
+    children: [
+      { id: "itinerario_ver", label: "Ver" },
+      { id: "itinerario_crear", label: "Crear" },
+      { id: "itinerario_guardar", label: "Guardar" },
+      { id: "itinerario_editar", label: "Editar" },
+      { id: "itinerario_eliminar", label: "Eliminar" }
+    ]
+  },
+  {
+    id: "sortear",
+    label: "Sortear",
+    children: [
+      { id: "sortear_ver", label: "Ver / Listar" }
+    ]
+  },
+  {
+    id: "codigo",
+    label: "Codigo",
+    children: [
+      { id: "codigo_ver", label: "Ver" },
+      { id: "codigo_generar", label: "Generar codigo" },
+      { id: "codigo_seleccionar_parroquia", label: "Seleccionar parroquia" },
+      { id: "codigo_seleccionar_comunidad", label: "Seleccionar Comunidad" },
+      { id: "codigo_guardar", label: "Guardar" },
+      { id: "codigo_editar", label: "Editar" },
+      { id: "codigo_eliminar", label: "Eliminar" }
+    ]
+  },
+  {
+    id: "permisos",
+    label: "Permisos",
+    children: [
+      { id: "permisos_cuenta", label: "Cuenta" },
+      {
+        id: "permisos_acceso",
+        label: "Acceso",
+        children: [
+          {
+            id: "permisos_acceso_miembros",
+            label: "Miembros",
+            children: [
+              { id: "permisos_acceso_miembros_editar_rol", label: "Editar/Cambiar Rol" },
+              { id: "permisos_acceso_miembros_editar_suspender", label: "Suspender / banear usuario" },
+              { id: "permisos_acceso_miembros_eliminar", label: "Eliminar" }
+            ]
+          },
+          {
+            id: "permisos_acceso_grupos",
+            label: "Grupos",
+            children: [
+              { id: "permisos_acceso_grupos_ver", label: "Ver" },
+              { id: "permisos_acceso_grupos_crear", label: "Crear Grupo / Rol" },
+              { id: "permisos_acceso_grupos_editar", label: "Editar" },
+              { id: "permisos_acceso_grupos_eliminar", label: "Eliminar" }
+            ]
+          },
+          {
+            id: "permisos_acceso_permisos",
+            label: "Permisos",
+            children: [
+              { id: "permisos_acceso_permisos_ver", label: "Ver" },
+              { id: "permisos_acceso_permisos_asignar", label: "Asignar Permiso" }
+            ]
+          },
+          { id: "permisos_uso_app", label: "Uso App" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "ajuste",
+    label: "Ajuste",
+    children: [
+      { id: "ajuste_ver", label: "Ver Ajuste" }
+    ]
+  }
+];
+
+function renderPermissionsTreeMarkup() {
+    if (!permisosTree) return;
+    permisosTree.innerHTML = "";
+    buildTreeNodes(PERMISSIONS_TREE, permisosTree);
+}
+
+function buildTreeNodes(nodes, parentEl) {
+    nodes.forEach(node => {
+        const hasChildren = node.children && node.children.length > 0;
+        
+        const nodeEl = document.createElement("div");
+        nodeEl.className = "tree-node";
+        
+        const headerEl = document.createElement("div");
+        headerEl.className = "tree-node-header";
+        
+        const leftEl = document.createElement("div");
+        leftEl.className = "tree-node-left";
+        
+        const savedStates = JSON.parse(localStorage.getItem("permisos_tree_expanded")) || {};
+        const isExpanded = savedStates[node.id] !== false; // Default to expanded (true)
+
+        let toggleBtn = null;
+        if (hasChildren) {
+            leftEl.style.cursor = "pointer";
+            toggleBtn = document.createElement("span");
+            toggleBtn.className = "tree-toggle";
+            toggleBtn.textContent = isExpanded ? "▼" : "▶";
+            leftEl.appendChild(toggleBtn);
+
+            leftEl.addEventListener("click", () => {
+                const childrenContainer = nodeEl.querySelector(".tree-node-children");
+                const saved = JSON.parse(localStorage.getItem("permisos_tree_expanded")) || {};
+                if (childrenContainer.style.display === "none") {
+                    childrenContainer.style.display = "block";
+                    toggleBtn.textContent = "▼";
+                    saved[node.id] = true;
+                } else {
+                    childrenContainer.style.display = "none";
+                    toggleBtn.textContent = "▶";
+                    saved[node.id] = false;
+                }
+                localStorage.setItem("permisos_tree_expanded", JSON.stringify(saved));
+            });
+        } else {
+            const spacer = document.createElement("span");
+            spacer.style.width = "20px";
+            leftEl.appendChild(spacer);
+        }
+        
+        const labelEl = document.createElement("span");
+        labelEl.textContent = node.label;
+        leftEl.appendChild(labelEl);
+        
+        const rightEl = document.createElement("div");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "tree-checkbox";
+        checkbox.dataset.id = node.id;
+        
+        if (hasChildren) {
+            checkbox.addEventListener("change", () => {
+                const subCheckboxes = nodeEl.querySelectorAll(".tree-checkbox");
+                subCheckboxes.forEach(cb => {
+                    cb.checked = checkbox.checked;
+                    cb.indeterminate = false;
+                });
+            });
+        }
+        
+        rightEl.appendChild(checkbox);
+        
+        headerEl.appendChild(leftEl);
+        headerEl.appendChild(rightEl);
+        nodeEl.appendChild(headerEl);
+        
+        if (hasChildren) {
+            const childrenEl = document.createElement("div");
+            childrenEl.className = "tree-node-children";
+            childrenEl.style.display = isExpanded ? "block" : "none";
+            
+            buildTreeNodes(node.children, childrenEl);
+            nodeEl.appendChild(childrenEl);
+            
+            // Listen for child updates to sync parent checked state
+            childrenEl.addEventListener("change", (e) => {
+                e.stopPropagation();
+                const immediateCheckboxes = childrenEl.querySelectorAll(`:scope > .tree-node > .tree-node-header > div > .tree-checkbox`);
+                const allChecked = Array.from(immediateCheckboxes).every(cb => cb.checked);
+                const someChecked = Array.from(immediateCheckboxes).some(cb => cb.checked || cb.indeterminate);
+                
+                checkbox.checked = allChecked;
+                checkbox.indeterminate = !allChecked && someChecked;
+                
+                // Bubble event upwards to parent nodes
+                const parentNodeEvent = new Event("change", { bubbles: true });
+                nodeEl.parentNode.dispatchEvent(parentNodeEvent);
+            });
+        }
+        
+        parentEl.appendChild(nodeEl);
+    });
+}
+
 async function loadGroupPermissions() {
     const selectedGroup = selectPermisosGrupo.value;
     if (!selectedGroup) return;
@@ -476,12 +739,25 @@ async function loadGroupPermissions() {
             const data = docSnap.data();
             chkAdminTotal.checked = !!data.adminTotal;
             
-            rowsPermisos.forEach(row => {
-                const page = row.getAttribute("data-page");
-                const pageData = data[page] || { leer: false, escribir: false, borrar: false };
-                row.querySelector(".chk-leer").checked = !!pageData.leer;
-                row.querySelector(".chk-escribir").checked = !!pageData.escribir;
-                row.querySelector(".chk-borrar").checked = !!pageData.borrar;
+            const permissionsData = data.permissions || {};
+            const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+            checkboxes.forEach(cb => {
+                const id = cb.dataset.id;
+                cb.checked = !!permissionsData[id];
+            });
+
+            // Re-sync indeterminate state bottom-up
+            const parents = Array.from(permisosTree.querySelectorAll(".tree-node")).reverse();
+            parents.forEach(nodeEl => {
+                const checkbox = nodeEl.querySelector(":scope > .tree-node-header > div > .tree-checkbox");
+                const childrenEl = nodeEl.querySelector(".tree-node-children");
+                if (childrenEl) {
+                    const childCheckboxes = childrenEl.querySelectorAll(`:scope > .tree-node > .tree-node-header > div > .tree-checkbox`);
+                    const allChecked = Array.from(childCheckboxes).every(cb => cb.checked);
+                    const someChecked = Array.from(childCheckboxes).some(cb => cb.checked || cb.indeterminate);
+                    checkbox.checked = allChecked;
+                    checkbox.indeterminate = !allChecked && someChecked;
+                }
             });
         } else {
             if (selectedGroup === "admin") {
@@ -497,35 +773,31 @@ async function loadGroupPermissions() {
 
 function resetCheckboxes() {
     chkAdminTotal.checked = false;
-    setAllCheckboxes(false);
+    const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+        cb.indeterminate = false;
+        cb.disabled = false;
+    });
 }
 
 function setAllCheckboxes(state) {
-    rowsPermisos.forEach(row => {
-        row.querySelector(".chk-leer").checked = state;
-        row.querySelector(".chk-escribir").checked = state;
-        row.querySelector(".chk-borrar").checked = state;
+    const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+    checkboxes.forEach(cb => {
+        cb.checked = state;
+        cb.indeterminate = false;
     });
 }
 
 function toggleAdminTotal() {
     const isTotal = chkAdminTotal.checked;
-    rowsPermisos.forEach(row => {
-        const chkLeer = row.querySelector(".chk-leer");
-        const chkEscribir = row.querySelector(".chk-escribir");
-        const chkBorrar = row.querySelector(".chk-borrar");
-
+    const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+    checkboxes.forEach(cb => {
         if (isTotal) {
-            chkLeer.checked = true;
-            chkEscribir.checked = true;
-            chkBorrar.checked = true;
-            chkLeer.disabled = true;
-            chkEscribir.disabled = true;
-            chkBorrar.disabled = true;
+            cb.checked = true;
+            cb.disabled = true;
         } else {
-            chkLeer.disabled = false;
-            chkEscribir.disabled = false;
-            chkBorrar.disabled = false;
+            cb.disabled = false;
         }
     });
 }
@@ -536,19 +808,18 @@ async function savePermissions() {
 
     btnSavePermisos.disabled = true;
     try {
+        const permissions = {};
+        const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+        checkboxes.forEach(cb => {
+            const id = cb.dataset.id;
+            permissions[id] = cb.checked;
+        });
+
         const data = {
             adminTotal: chkAdminTotal.checked,
+            permissions,
             updatedAt: new Date().toISOString()
         };
-
-        rowsPermisos.forEach(row => {
-            const page = row.getAttribute("data-page");
-            data[page] = {
-                leer: row.querySelector(".chk-leer").checked,
-                escribir: row.querySelector(".chk-escribir").checked,
-                borrar: row.querySelector(".chk-borrar").checked
-            };
-        });
 
         await setDoc(doc(db, "permisosRoles", selectedGroup), data, { merge: true });
         showAlert("💾 Permisos guardados con éxito para el grupo seleccionado.", "success");
@@ -638,4 +909,60 @@ function filterUsoLogs() {
     });
 
     renderUsoTable(filtrados);
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Main Tab: Uso App
+    const tabUso = document.getElementById("tab-usoapp");
+    if (tabUso && !window.hasPermission("permisos_uso_app")) {
+        tabUso.style.display = "none";
+    }
+
+    // Sub Tabs under Acceso
+    const tabMiembros = document.getElementById("subtab-miembros");
+    const hasMiembrosPerm = window.hasPermission("permisos_acceso_miembros_editar_rol") ||
+                            window.hasPermission("permisos_acceso_miembros_editar_suspender") ||
+                            window.hasPermission("permisos_acceso_miembros_eliminar");
+    if (tabMiembros && !hasMiembrosPerm) {
+        tabMiembros.style.display = "none";
+    }
+
+    const tabGrupos = document.getElementById("subtab-grupos");
+    const hasGruposPerm = window.hasPermission("permisos_acceso_grupos_ver") ||
+                          window.hasPermission("permisos_acceso_grupos_crear") ||
+                          window.hasPermission("permisos_acceso_grupos_editar") ||
+                          window.hasPermission("permisos_acceso_grupos_eliminar");
+    if (tabGrupos && !hasGruposPerm) {
+        tabGrupos.style.display = "none";
+    }
+
+    const tabPermisos = document.getElementById("subtab-permisos");
+    const hasPermisosPerm = window.hasPermission("permisos_acceso_permisos_ver");
+    if (tabPermisos && !hasPermisosPerm) {
+        tabPermisos.style.display = "none";
+    }
+
+    // Member edit options
+    const selectUserRol = document.getElementById("user-rol");
+    if (selectUserRol && !window.hasPermission("permisos_acceso_miembros_editar_rol")) {
+        selectUserRol.disabled = true;
+    }
+
+    const checkUserBanned = document.getElementById("user-banned");
+    if (checkUserBanned && !window.hasPermission("permisos_acceso_miembros_editar_suspender")) {
+        checkUserBanned.disabled = true;
+    }
+
+    // Save/create actions
+    const btnSaveGrupo = document.getElementById("btn-save-grupo");
+    if (btnSaveGrupo && !window.hasPermission("permisos_acceso_grupos_crear") && !window.hasPermission("permisos_acceso_grupos_editar")) {
+        btnSaveGrupo.style.display = "none";
+    }
+
+    const btnSavePermisos = document.getElementById("btn-save-permisos");
+    if (btnSavePermisos && !window.hasPermission("permisos_acceso_permisos_asignar")) {
+        btnSavePermisos.style.display = "none";
+    }
 }

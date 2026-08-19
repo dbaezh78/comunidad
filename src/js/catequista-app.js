@@ -20,9 +20,25 @@ let allComunidades      = []; // Array of { id, number, parroquiaId, data }
 let allHermanos         = []; // Array of { id, name, phone, email, parroquiaId, comunidadId, data }
 let cachedParroquias    = {}; // id -> name
 let cachedComunidades   = {}; // id -> name
+let loggedInUserComunidadId = null;
+let loggedInUserRole      = "hermano";
 
 // App Ready
-window.addEventListener("app:ready", async () => {
+window.addEventListener("app:ready", async (e) => {
+    enforcePermissions();
+    const user = e.detail;
+    if (user && user.email) {
+        try {
+            const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
+            if (uSnap.exists()) {
+                loggedInUserComunidadId = uSnap.data().comunidadId || null;
+                loggedInUserRole = uSnap.data().rol || "hermano";
+            }
+        } catch(err) {
+            console.error("Error loading user profile in catequista:", err);
+        }
+    }
+
     // Event listeners
     selectParroquia.addEventListener("change", onParroquiaChange);
     selectComunidad.addEventListener("change", onComunidadChange);
@@ -160,7 +176,9 @@ function onComunidadChange() {
                 selectHermano.appendChild(new Option(com.data.catequistaNombre || "Catequista Actual", com.data.catequistaId));
             }
             selectHermano.value = com.data.catequistaId;
-            btnRemove.style.display = "inline-block";
+            if (window.hasPermission && window.hasPermission("catequista_quitar")) {
+                btnRemove.style.display = "inline-block";
+            }
         }
     }
 
@@ -235,7 +253,9 @@ async function saveAssignment() {
         await reloadCommunitiesCache();
         
         // Update form state
-        btnRemove.style.display = "inline-block";
+        if (window.hasPermission && window.hasPermission("catequista_quitar")) {
+            btnRemove.style.display = "inline-block";
+        }
     } catch(err) {
         showAlert("Error al asignar: " + err.message, "error");
     } finally {
@@ -286,6 +306,12 @@ function renderAccordion() {
     const grouped = {}; // catequistaId -> { name, phone, parishes: { parroquiaId: { name, communities: [] } } }
 
     allComunidades.forEach(com => {
+        // If user is not admin/creator, restrict to their own community's catechist details
+        const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin" && !window.hasPermission("catequista_guardar");
+        if (isNotAdmin && loggedInUserComunidadId && com.id !== loggedInUserComunidadId) {
+            return;
+        }
+
         const catId = com.data.catequistaId;
         if (!catId) return; // Skip if no catechist is assigned
 
@@ -436,7 +462,14 @@ function renderAccordion() {
         });
 
         // Level 1 click toggle
+        const canExpand = window.hasPermission && window.hasPermission("catequista_ver_hilos");
+        if (!canExpand) {
+            const chevron = header.querySelector(".chevron");
+            if (chevron) chevron.style.display = "none";
+        }
+
         header.addEventListener("click", () => {
+            if (!canExpand) return;
             const visible = content.style.display === "block";
             content.style.display = visible ? "none" : "block";
             header.querySelector(".chevron").textContent = visible ? "▼" : "▲";
@@ -460,4 +493,41 @@ function filterAccordion() {
             item.style.display = "none";
         }
     });
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Show/hide cards based on section visibility permissions
+    const cards = document.querySelectorAll(".page-content > .card");
+    if (cards.length >= 2) {
+        if (!window.hasPermission("catequista_ver_asignacion")) {
+            cards[0].style.display = "none";
+        } else {
+            cards[0].style.display = "block";
+        }
+        if (!window.hasPermission("catequista_ver_catequistas")) {
+            cards[1].style.display = "none";
+        } else {
+            cards[1].style.display = "block";
+        }
+    }
+
+    // Guardar Asignacion
+    const btnSave = document.getElementById("btn-save-catequista");
+    const hasGuardar = window.hasPermission("catequista_guardar");
+    if (btnSave && !hasGuardar) {
+        btnSave.style.display = "none";
+    }
+
+    // Disable catechist dropdown if they cannot assign/modify
+    if (selectHermano && !hasGuardar) {
+        selectHermano.disabled = true;
+    }
+
+    // Quitar Catequista
+    const btnRemove = document.getElementById("btn-remove-catequista");
+    if (btnRemove && !window.hasPermission("catequista_quitar")) {
+        btnRemove.style.display = "none";
+    }
 }

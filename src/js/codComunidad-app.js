@@ -23,6 +23,7 @@ let editingCode = null;
 
 // App Ready
 window.addEventListener("app:ready", async () => {
+    enforcePermissions();
     await loadParroquias();
     await loadAllComunidadesCache();
     await loadHermanos();
@@ -160,13 +161,19 @@ function renderTable(lista) {
             <td>${cNombre}</td>
             <td>${correo}</td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit" data-id="${c.id}">✏️ Editar</button>
-                <button class="btn btn-sm btn-outline btn-delete" style="color:red; border-color:#f5c6cb;" data-id="${c.id}">✕</button>
+                ${window.hasPermission("codigo_editar") ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${c.id}">✏️ Editar</button>` : ""}
+                ${window.hasPermission("codigo_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete" style="color:red; border-color:#f5c6cb;" data-id="${c.id}">✕</button>` : ""}
             </td>
         `;
 
-        tr.querySelector(".btn-edit").addEventListener("click", () => editCode(c));
-        tr.querySelector(".btn-delete").addEventListener("click", () => deleteCode(c.id));
+        const btnEdit = tr.querySelector(".btn-edit");
+        if (btnEdit) {
+            btnEdit.addEventListener("click", () => editCode(c));
+        }
+        const btnDelete = tr.querySelector(".btn-delete");
+        if (btnDelete) {
+            btnDelete.addEventListener("click", () => deleteCode(c.id));
+        }
         tbody.appendChild(tr);
     });
 }
@@ -319,4 +326,32 @@ function updateHermanoDropdownForSelection() {
         selectHermano.appendChild(new Option(h.nombre, h.id));
     });
     selectHermano.disabled = false;
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Generar codigo (btnGen)
+    const btnGen = document.getElementById("btn-gen-code");
+    if (btnGen && !window.hasPermission("codigo_generar")) {
+        btnGen.style.display = "none";
+    }
+
+    // Seleccionar parroquia (selectParroquia)
+    const selectParroquia = document.getElementById("c-parroquia");
+    if (selectParroquia && !window.hasPermission("codigo_seleccionar_parroquia")) {
+        selectParroquia.disabled = true;
+    }
+
+    // Seleccionar Comunidad (selectComunidad)
+    const selectComunidad = document.getElementById("c-comunidad");
+    if (selectComunidad && !window.hasPermission("codigo_seleccionar_comunidad")) {
+        selectComunidad.disabled = true;
+    }
+
+    // Guardar (btnSave)
+    const btnSave = document.getElementById("btn-save-code");
+    if (btnSave && !window.hasPermission("codigo_guardar")) {
+        btnSave.style.display = "none";
+    }
 }

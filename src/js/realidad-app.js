@@ -36,6 +36,7 @@ let editingId        = null;
 
 // ── App ready ────────────────────────────────────
 window.addEventListener("app:ready", async () => {
+    enforcePermissions();
     await loadHermanos();
     await loadRealidades();
     setupCatequistaSearch();
@@ -138,13 +139,16 @@ function renderCards(realidades) {
             ${r.historia ? `<div class="rc-historia" style="margin-top:8px;font-size:0.85rem;color:#555;border-top:1px solid #eee;padding-top:6px;"><strong>Historia:</strong><br>${r.historia.replace(/\n/g, '<br>')}</div>` : ""}
             ${r.itinerario ? `<div class="rc-itinerario" style="margin-top:8px;font-size:0.85rem;color:#555;border-top:1px solid #eee;padding-top:6px;"><strong>Itinerario de Formación:</strong><br>${r.itinerario.replace(/\n/g, '<br>')}</div>` : ""}
             <div style="margin-top:12px;">
-                <button class="btn btn-sm btn-outline btn-editar-r" data-id="${r.id}">✏️ Editar</button>
+                ${window.hasPermission("realidad_editar") ? `<button class="btn btn-sm btn-outline btn-editar-r" data-id="${r.id}">✏️ Editar</button>` : ""}
             </div>
         `;
-        card.querySelector(".btn-editar-r").addEventListener("click", (e) => {
-            e.stopPropagation();
-            openEdit(r);
-        });
+        const btnEditR = card.querySelector(".btn-editar-r");
+        if (btnEditR) {
+            btnEditR.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openEdit(r);
+            });
+        }
         realidadCards.appendChild(card);
     });
 }
@@ -247,4 +251,26 @@ function showAlert(msg, type = "info") {
     globalAlert.className   = `alert alert-${type} visible`;
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (type === "success") setTimeout(() => { globalAlert.className = "alert"; }, 3500);
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Crear Nueva Realidad
+    const btnNueva = document.getElementById("btn-nueva-realidad");
+    if (btnNueva && !window.hasPermission("realidad_crear")) {
+        btnNueva.style.display = "none";
+    }
+
+    // Guardar Realidad / Editar
+    const btnSave = document.getElementById("btn-save-realidad");
+    if (btnSave && !window.hasPermission("realidad_crear") && !window.hasPermission("realidad_editar")) {
+        btnSave.style.display = "none";
+    }
+
+    // Eliminar Realidad
+    const btnDelete = document.getElementById("btn-delete-realidad");
+    if (btnDelete && !window.hasPermission("realidad_eliminar")) {
+        btnDelete.style.display = "none";
+    }
 }

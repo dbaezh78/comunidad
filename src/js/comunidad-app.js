@@ -56,6 +56,9 @@ let responsablesAsignados = {};       // { 1: {hermanoId, parejaId, esCasado}, .
 let cachedParroquias     = {};        // parroquiaId -> nombre
 let todasComunidades     = [];        // all communities in system
 let isCreatingNew        = false;
+let loggedInUserComunidadId = null;
+let loggedInUserParroquiaId = null;
+let loggedInUserRole      = "hermano";
 
 let currentSortColumn   = "parroquiaNombre";
 let currentSortDir      = "asc";
@@ -65,12 +68,47 @@ let filterHistory       = [];
 const NUMS_RESP = ["","1ro","2do","3ro","4to","5to","6to","7mo","8vo"];
 
 // ── App ready ────────────────────────────────────
-window.addEventListener("app:ready", async () => {
+window.addEventListener("app:ready", async (e) => {
+    const user = e.detail;
+    if (user && user.email) {
+        try {
+            const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
+            if (uSnap.exists()) {
+                loggedInUserComunidadId = uSnap.data().comunidadId || null;
+                loggedInUserParroquiaId = uSnap.data().parroquiaId || null;
+                loggedInUserRole = uSnap.data().rol || "hermano";
+            }
+        } catch(err) {
+            console.error("Error loading user profile in comunidad:", err);
+        }
+    }
+
     await loadParroquias();
     await loadItinerarios();
     await loadAllComunidades();
     setupCatequistaSelectors();
     setupSortingListeners();
+    enforcePermissions();
+
+    const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin" && !window.hasPermission("comunidad_consultar");
+    if (isNotAdmin && loggedInUserParroquiaId && loggedInUserComunidadId) {
+        selParroquia.value = loggedInUserParroquiaId;
+        currentParroquiaId = loggedInUserParroquiaId;
+        
+        // Populate selComunidad with only the user's community
+        selComunidad.innerHTML = '<option value="">— Seleccionar comunidad —</option>';
+        const snap = await getDocs(collection(db, "parroquias", currentParroquiaId, "comunidades"));
+        snap.forEach(d => {
+            if (d.id === loggedInUserComunidadId) {
+                const num = d.data().numero || d.id;
+                selComunidad.appendChild(new Option(`Comunidad ${num}`, d.id));
+            }
+        });
+        selComunidad.value = loggedInUserComunidadId;
+        selComunidad.disabled = false;
+        currentComunidadId = loggedInUserComunidadId;
+        await loadComunidad();
+    }
 
     const searchInput = document.getElementById("search-comunidades");
     if (searchInput) {
@@ -96,7 +134,13 @@ async function loadParroquias() {
     selParroquia.innerHTML = '<option value="">— Seleccionar —</option>';
     cCatequistaParroquia.innerHTML = '<option value="">— Seleccionar parroquia —</option>';
     cachedParroquias = {};
+    
+    const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin" && !window.hasPermission("comunidad_consultar");
+
     snap.forEach(d => {
+        if (isNotAdmin && loggedInUserParroquiaId && d.id !== loggedInUserParroquiaId) {
+            return;
+        }
         const opt = new Option(d.data().nombre, d.id);
         selParroquia.appendChild(opt);
         cCatequistaParroquia.appendChild(new Option(d.data().nombre, d.id));
@@ -165,7 +209,13 @@ selParroquia.addEventListener("change", async () => {
         collection(db, "parroquias", currentParroquiaId, "comunidades")
     );
     selComunidad.innerHTML = '<option value="">— Seleccionar comunidad —</option>';
+    
+    const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin" && !window.hasPermission("comunidad_consultar");
+
     snap.forEach(d => {
+        if (isNotAdmin && loggedInUserComunidadId && d.id !== loggedInUserComunidadId) {
+            return;
+        }
         const num = d.data().numero || d.id;
         selComunidad.appendChild(new Option(`Comunidad ${num}`, d.id));
     });
@@ -247,7 +297,7 @@ async function loadComunidad() {
     datosView.style.display = "block";
     cardResponsables.style.display = "block";
     cardHermanos.style.display = "block";
-    btnDeleteComunidad.style.display = "block";
+    btnDeleteComunidad.style.display = (window.hasPermission && window.hasPermission("comunidad_eliminar")) ? "block" : "none";
 }
 
 // ── Vista datos ───────────────────────────────────
@@ -283,7 +333,7 @@ btnToggleDatos.addEventListener("click", async () => {
     if (editing) { datosForm.style.display = "none"; datosView.style.display = "block"; return; }
 
     isCreatingNew = false;
-    btnDeleteComunidad.style.display = "block";
+    btnDeleteComunidad.style.display = (window.hasPermission && window.hasPermission("comunidad_eliminar")) ? "block" : "none";
 
     const c = currentComunidadData;
     cNumero.value = c.numero || "";
@@ -694,7 +744,8 @@ function showAlert(msg, type = "info") {
 }
 
 async function loadCommunityCode(comunidadId) {
-    if (!comunidadId) {
+    const canSeeCode = window.hasPermission && (window.hasPermission("comunidad_codigo") || window.hasPermission("codigo_ver"));
+    if (!comunidadId || !canSeeCode) {
         document.getElementById("comunidad-codigo-widget").style.display = "none";
         return;
     }
@@ -781,6 +832,11 @@ async function loadAllComunidades() {
             const parroquiaId = d.ref.parent.parent.id;
             const pNombre = cachedParroquias[parroquiaId] || "Parroquia Desconocida";
             
+            const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin" && !window.hasPermission("comunidad_consultar");
+            if (isNotAdmin && loggedInUserComunidadId && d.id !== loggedInUserComunidadId) {
+                return;
+            }
+
             todasComunidades.push({
                 id: d.id,
                 parroquiaId,
@@ -819,8 +875,9 @@ function renderComunidadesTable(lista, isFilteredCall = false) {
             <td><span class="click-filter" data-col="etapaNombre" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted; font-weight:600; color:#475569;">${c.etapaNombre || "—"}</span></td>
             <td><span class="click-filter" data-col="catequistaNombre" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${c.catequistaNombre || "—"}</span></td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit-table" data-id="${c.id}">✏️</button>
-                <button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${c.id}">✕</button>
+                ${(window.hasPermission("comunidad_consultar") || window.hasPermission("comunidad_ver_hermanos")) ? `<button class="btn btn-sm btn-outline btn-view-table" data-id="${c.id}" title="Ver comunidad" style="margin-right:4px;">👁️</button>` : ""}
+                ${window.hasPermission("comunidad_editar") ? `<button class="btn btn-sm btn-outline btn-edit-table" data-id="${c.id}" title="Editar comunidad">✏️</button>` : ""}
+                ${window.hasPermission("comunidad_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${c.id}">✕</button>` : ""}
             </td>
         `;
 
@@ -842,48 +899,61 @@ function renderComunidadesTable(lista, isFilteredCall = false) {
             });
         });
 
-        tr.querySelector(".btn-edit-table").addEventListener("click", () => {
-            selectAndEditCommunity(c);
-        });
+        const btnView = tr.querySelector(".btn-view-table");
+        if (btnView) {
+            btnView.addEventListener("click", () => {
+                consultComunidadById(c.id, c.parroquiaId);
+            });
+        }
 
-        tr.querySelector(".btn-delete-table").addEventListener("click", async () => {
-            const confirmDelete = await window.customConfirm(
-                "Eliminar Comunidad",
-                `¿Estás seguro de que deseas eliminar la Comunidad ${c.numero} de la parroquia ${c.parroquiaNombre}?\nSe desvincularán todos sus hermanos.`,
-                { icon: "⚠️", danger: true }
-            );
-            if (!confirmDelete) return;
+        const btnEdit = tr.querySelector(".btn-edit-table");
+        if (btnEdit) {
+            btnEdit.addEventListener("click", () => {
+                selectAndEditCommunity(c);
+            });
+        }
 
-            try {
-                const hSnap = await getDocs(query(collection(db, "hermanos"), where("comunidadId", "==", c.id)));
-                const batch = [];
-                hSnap.forEach(hd => {
-                    batch.push(updateDoc(doc(db, "hermanos", hd.id), {
-                        comunidadId: null,
-                        esResponsable: false,
-                        posicionResponsable: null
-                    }));
-                });
-                await Promise.all(batch);
+        const btnDelete = tr.querySelector(".btn-delete-table");
+        if (btnDelete) {
+            btnDelete.addEventListener("click", async () => {
+                const confirmDelete = await window.customConfirm(
+                    "Eliminar Comunidad",
+                    `¿Estás seguro de que deseas eliminar la Comunidad ${c.numero} de la parroquia ${c.parroquiaNombre}?\nSe desvincularán todos sus hermanos.`,
+                    { icon: "⚠️", danger: true }
+                );
+                if (!confirmDelete) return;
 
-                await deleteDoc(doc(db, "parroquias", c.parroquiaId, "comunidades", c.id));
+                try {
+                    const hSnap = await getDocs(query(collection(db, "hermanos"), where("comunidadId", "==", c.id)));
+                    const batch = [];
+                    hSnap.forEach(hd => {
+                        batch.push(updateDoc(doc(db, "hermanos", hd.id), {
+                            comunidadId: null,
+                            esResponsable: false,
+                            posicionResponsable: null
+                        }));
+                    });
+                    await Promise.all(batch);
 
-                if (currentComunidadId === c.id) {
-                    currentComunidadId = null;
-                    currentComunidadData = null;
-                    mainPanel.style.display = "none";
-                    selComunidad.value = "";
+                    await deleteDoc(doc(db, "parroquias", c.parroquiaId, "comunidades", c.id));
+
+                    if (currentComunidadId === c.id) {
+                        currentComunidadId = null;
+                        currentComunidadData = null;
+                        mainPanel.style.display = "none";
+                        selComunidad.value = "";
+                    }
+
+                    const opt = selComunidad.querySelector(`option[value="${c.id}"]`);
+                    if (opt) opt.remove();
+
+                    await loadAllComunidades();
+                    showAlert("🗑️ Comunidad eliminada.", "success");
+                } catch(err) {
+                    showAlert("Error: " + err.message, "error");
                 }
-
-                const opt = selComunidad.querySelector(`option[value="${c.id}"]`);
-                if (opt) opt.remove();
-
-                await loadAllComunidades();
-                showAlert("🗑️ Comunidad eliminada.", "success");
-            } catch(err) {
-                showAlert("Error: " + err.message, "error");
-            }
-        });
+            });
+        }
 
         tbody.appendChild(tr);
     });
@@ -1059,7 +1129,13 @@ function renderActiveFilterChips() {
 async function loadComunidadesDropdownForParroquia(pid) {
     const snap = await getDocs(collection(db, "parroquias", pid, "comunidades"));
     selComunidad.innerHTML = '<option value="">— Seleccionar comunidad —</option>';
+    
+    const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin" && !window.hasPermission("comunidad_consultar");
+
     snap.forEach(d => {
+        if (isNotAdmin && loggedInUserComunidadId && d.id !== loggedInUserComunidadId) {
+            return;
+        }
         const num = d.data().numero || d.id;
         selComunidad.appendChild(new Option(`Comunidad ${num}`, d.id));
     });
@@ -1080,6 +1156,29 @@ async function selectAndEditCommunity(c) {
     const editing = datosForm.style.display !== "none";
     if (!editing) {
         btnToggleDatos.click();
+    }
+}
+
+async function consultComunidadById(id, parroquiaId) {
+    selParroquia.value = parroquiaId;
+    currentParroquiaId = parroquiaId;
+    await loadComunidadesDropdownForParroquia(parroquiaId);
+    
+    selComunidad.value = id;
+    currentComunidadId = id;
+    
+    await loadComunidad();
+    
+    // Asegurar que está en modo visualización (no edición)
+    const editing = datosForm.style.display !== "none";
+    if (editing) {
+        btnCancelDatos.click();
+    }
+    
+    // Scroll suave hasta el detalle de comunidad
+    const detailCard = document.querySelector(".page-content > .card:nth-of-type(2)");
+    if (detailCard) {
+        detailCard.scrollIntoView({ behavior: "smooth" });
     }
 }
 
@@ -1207,4 +1306,26 @@ function applyExcelFilter() {
     efMenu.style.display = "none";
     updateHeaderLabels();
     filterComunidades();
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // +Nueva Comunidad button
+    const btnNueva = document.getElementById("btn-nueva-comunidad");
+    if (btnNueva) {
+        btnNueva.style.display = window.hasPermission("comunidad_crear") ? "inline-block" : "none";
+    }
+
+    // Editar button
+    const btnToggleDatos = document.getElementById("btn-toggle-datos");
+    if (btnToggleDatos) {
+        btnToggleDatos.style.display = window.hasPermission("comunidad_editar") ? "inline-block" : "none";
+    }
+
+    // Generar código button
+    const btnGenerateCode = document.getElementById("btn-generate-code");
+    if (btnGenerateCode) {
+        btnGenerateCode.style.display = window.hasPermission("comunidad_codigo") ? "inline-block" : "none";
+    }
 }

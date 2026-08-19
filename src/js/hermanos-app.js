@@ -73,6 +73,7 @@ window.addEventListener("app:ready", async (e) => {
         }
     } catch(err) { console.error(err); }
 
+    enforcePermissions();
     await loadParroquias();
     await cacheAllComunidades();
     await loadCarismas();
@@ -575,11 +576,14 @@ function renderTable(lista) {
             <td style="text-align:center;">${razonBadge}</td>
             <td style="text-align:center;">${locIcon}</td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit" data-id="${h.id}">✏️</button>
+                ${window.hasPermission("hermanos_editar") ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${h.id}">✏️</button>` : ""}
             </td>
         `;
         
-        tr.querySelector(".btn-edit").addEventListener("click", () => openEditForm(h));
+        const btnEdit = tr.querySelector(".btn-edit");
+        if (btnEdit) {
+            btnEdit.addEventListener("click", () => openEditForm(h));
+        }
         tbody.appendChild(tr);
     });
 }
@@ -1109,4 +1113,38 @@ function renderActiveFilterChips() {
         });
         bar.appendChild(chip);
     });
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Buscar
+    const searchWrap = document.getElementById("search-input");
+    if (searchWrap && !window.hasPermission("hermanos_buscar")) {
+        searchWrap.style.display = "none";
+    }
+
+    // crear Nuevo Hermano
+    const btnNuevo = document.getElementById("btn-nuevo-hermano");
+    if (btnNuevo && !window.hasPermission("hermanos_crear")) {
+        btnNuevo.style.display = "none";
+    }
+
+    // Eliminar hermano Creado
+    const btnDelete = document.getElementById("btn-delete");
+    if (btnDelete && !window.hasPermission("hermanos_eliminar")) {
+        btnDelete.style.display = "none";
+    }
+
+    // Guardar Hermano creado o modificado
+    const btnSave = document.getElementById("btn-save");
+    if (btnSave && !window.hasPermission("hermanos_guardar")) {
+        btnSave.style.display = "none";
+    }
+
+    // Cambiar de Activo a No Activo en edicion de hermano
+    const hActivo = document.getElementById("h-activo");
+    if (hActivo && !window.hasPermission("hermanos_cambiar_activo")) {
+        hActivo.disabled = true;
+    }
 }

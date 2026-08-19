@@ -133,7 +133,71 @@ async function checkCommunityAccess(user) {
     }
 }
 
-function allowUserAccess(user) {
+async function allowUserAccess(user) {
+    updateLoader(85);
+    
+    // Fetch role and permissions
+    let rol = "hermano";
+    let permissions = {};
+    let adminTotal = false;
+
+    const isCreator = user.email.toLowerCase() === "dbaezh78@gmail.com";
+    if (isCreator) {
+        adminTotal = true;
+        rol = "admin";
+    } else {
+        try {
+            const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
+            if (uSnap.exists()) {
+                rol = uSnap.data().rol || "hermano";
+            }
+            
+            const pSnap = await getDoc(doc(db, "permisosRoles", rol));
+            if (pSnap.exists()) {
+                const pData = pSnap.data();
+                adminTotal = !!pData.adminTotal;
+                permissions = pData.permissions || {};
+            }
+        } catch(e) {
+            console.error("Error loading user permissions:", e);
+        }
+    }
+
+    // Expose globally
+    window.userPermissions = {
+        rol,
+        adminTotal,
+        permissions
+    };
+
+    window.hasPermission = function(permId) {
+        if (isCreator || adminTotal) return true;
+        return !!permissions[permId];
+    };
+
+    // Navigation and Routing Guards
+    const currentPath = window.location.pathname.split("/").pop() || "index.html";
+    const basePage = currentPath.split("?")[0].split("#")[0];
+
+    // Page Guards
+    const pageGuards = {
+        "parroquia.html": () => window.hasPermission("parroquia_ver") || window.hasPermission("parroquia_consultar"),
+        "catequista.html": () => window.hasPermission("catequista_ver_hilos") || window.hasPermission("catequista_ver_asignacion") || window.hasPermission("catequista_ver_catequistas"),
+        "comunidad.html": () => window.hasPermission("comunidad_consultar") || window.hasPermission("comunidad_ver_hermanos"),
+        "hermanos.html": () => window.hasPermission("hermanos_buscar") || window.hasPermission("hermanos_ver"),
+        "realidad.html": () => window.hasPermission("realidad_ver"),
+        "itinerario.html": () => window.hasPermission("itinerario_ver"),
+        "sortear.html": () => window.hasPermission("sortear_ver"),
+        "codComunidad.html": () => window.hasPermission("codigo_ver"),
+        "permisos.html": () => window.hasPermission("permisos_cuenta") || window.hasPermission("permisos_acceso")
+    };
+
+    if (pageGuards[basePage] && !pageGuards[basePage]()) {
+        console.warn(`Access denied to page: ${basePage}. Redirecting to index.html`);
+        window.location.href = "index.html";
+        return;
+    }
+
     updateLoader(100);
     const overlay = document.getElementById("activation-overlay") || document.getElementById("banned-overlay");
     if (overlay) overlay.remove();
@@ -151,20 +215,49 @@ function allowUserAccess(user) {
     // Inyectar navbar global dinámico y marcar activo según la página actual
     const navContainer = document.querySelector("nav.nav-bar");
     if (navContainer) {
-        const currentPath = window.location.pathname.split("/").pop() || "index.html";
-        navContainer.innerHTML = `
-            <span class="nav-logo">⛪ Santa Iglesia Católica</span>
-            <a href="index.html"     class="nav-link ${currentPath === 'index.html' || currentPath === '' ? 'active' : ''}"><span class="nav-icon">🏠</span> Home</a>
-            <a href="parroquia.html" class="nav-link ${currentPath === 'parroquia.html' ? 'active' : ''}"><span class="nav-icon">⛪</span> Parroquia</a>
-            <a href="catequista.html" class="nav-link ${currentPath === 'catequista.html' ? 'active' : ''}"><span class="nav-icon">📖</span> Catequistas</a>
-            <a href="comunidad.html" class="nav-link ${currentPath === 'comunidad.html' ? 'active' : ''}"><span class="nav-icon" style="background:#ffffff; border-radius:4px; padding:2px; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; line-height:1;">👥</span> Comunidad</a>
-            <a href="hermanos.html"  class="nav-link ${currentPath === 'hermanos.html' ? 'active' : ''}"><span class="nav-icon">👨‍👩‍👧‍👦</span> Hermanos</a>
-            <a href="realidad.html"  class="nav-link ${currentPath === 'realidad.html' ? 'active' : ''}"><span class="nav-icon">📚</span> Realidad</a>
-            <a href="itinerario.html" class="nav-link ${currentPath === 'itinerario.html' ? 'active' : ''}"><span class="nav-icon">🗺️</span> Itinerario</a>
-            <a href="sortear.html"   class="nav-link ${currentPath === 'sortear.html' ? 'active' : ''}"><span class="nav-icon">🎲</span> Sortear</a>
-            <a href="codComunidad.html" class="nav-link ${currentPath === 'codComunidad.html' ? 'active' : ''}"><span class="nav-icon">🔑</span> Códigos</a>
-            <a href="permisos.html"  class="nav-link ${currentPath === 'permisos.html' ? 'active' : ''}"><span class="nav-icon">🛡️</span> Permisos</a>
-        `;
+        let html = `<span class="nav-logo">⛪ Santa Iglesia Católica</span>`;
+        html += `<a href="index.html" class="nav-link ${basePage === 'index.html' || basePage === '' ? 'active' : ''}"><span class="nav-icon">🏠</span> Home</a>`;
+        
+        if (window.hasPermission("parroquia_ver") || window.hasPermission("parroquia_consultar")) {
+            html += `<a href="parroquia.html" class="nav-link ${basePage === 'parroquia.html' ? 'active' : ''}"><span class="nav-icon">⛪</span> Parroquia</a>`;
+        }
+        if (window.hasPermission("catequista_ver_hilos") || window.hasPermission("catequista_ver_asignacion") || window.hasPermission("catequista_ver_catequistas")) {
+            html += `<a href="catequista.html" class="nav-link ${basePage === 'catequista.html' ? 'active' : ''}"><span class="nav-icon">📖</span> Catequistas</a>`;
+        }
+        if (window.hasPermission("comunidad_consultar") || window.hasPermission("comunidad_ver_hermanos")) {
+            html += `<a href="comunidad.html" class="nav-link ${basePage === 'comunidad.html' ? 'active' : ''}"><span class="nav-icon" style="background:#ffffff; border-radius:4px; padding:2px; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; line-height:1;">👥</span> Comunidad</a>`;
+        }
+        if (window.hasPermission("hermanos_buscar") || window.hasPermission("hermanos_ver")) {
+            html += `<a href="hermanos.html" class="nav-link ${basePage === 'hermanos.html' ? 'active' : ''}"><span class="nav-icon">👨‍👩‍👧‍👦</span> Hermanos</a>`;
+        }
+        if (window.hasPermission("realidad_ver")) {
+            html += `<a href="realidad.html" class="nav-link ${basePage === 'realidad.html' ? 'active' : ''}"><span class="nav-icon">📚</span> Realidad</a>`;
+        }
+        if (window.hasPermission("itinerario_ver")) {
+            html += `<a href="itinerario.html" class="nav-link ${basePage === 'itinerario.html' ? 'active' : ''}"><span class="nav-icon">🗺️</span> Itinerario</a>`;
+        }
+        if (window.hasPermission("sortear_ver")) {
+            html += `<a href="sortear.html" class="nav-link ${basePage === 'sortear.html' ? 'active' : ''}"><span class="nav-icon">🎲</span> Sortear</a>`;
+        }
+        if (window.hasPermission("codigo_ver")) {
+            html += `<a href="codComunidad.html" class="nav-link ${basePage === 'codComunidad.html' ? 'active' : ''}"><span class="nav-icon">🔑</span> Códigos</a>`;
+        }
+        if (window.hasPermission("permisos_cuenta") || window.hasPermission("permisos_acceso")) {
+            html += `<a href="permisos.html" class="nav-link ${basePage === 'permisos.html' ? 'active' : ''}"><span class="nav-icon">🛡️</span> Permisos</a>`;
+        }
+        
+        navContainer.innerHTML = html;
+    }
+
+    // Hide cards in index.html if user lacks access
+    if (basePage === "index.html" || basePage === "") {
+        const cardLinks = document.querySelectorAll(".ajustes-grid-jesus > a");
+        cardLinks.forEach(link => {
+            const href = link.getAttribute("href");
+            if (pageGuards[href] && !pageGuards[href]()) {
+                link.style.display = "none";
+            }
+        });
     }
 
     if (!appInitialized) {
@@ -186,16 +279,22 @@ async function registerUserLogin(user) {
         }
     } catch(e) { console.error(e); }
 
-    let ip = "Desconocido";
-    let pais = "Desconocido";
-    try {
-        const res = await fetch("https://ipapi.co/json/");
-        if (res.ok) {
-            const ipData = await res.json();
-            ip = ipData.ip || "Desconocido";
-            pais = ipData.country_name || "Desconocido";
+    let ip = sessionStorage.getItem("cached_user_ip") || "Desconocido";
+    let pais = sessionStorage.getItem("cached_user_country") || "Desconocido";
+    if (ip === "Desconocido") {
+        try {
+            const res = await fetch("https://ipapi.co/json/");
+            if (res.ok) {
+                const ipData = await res.json();
+                ip = ipData.ip || "Desconocido";
+                pais = ipData.country_name || "Desconocido";
+                sessionStorage.setItem("cached_user_ip", ip);
+                sessionStorage.setItem("cached_user_country", pais);
+            }
+        } catch(e) {
+            // Mute error logs for external rate limits
         }
-    } catch(e) { console.error("Error fetching IP details:", e); }
+    }
 
     let comunidadId = null;
     let parroquiaId = null;

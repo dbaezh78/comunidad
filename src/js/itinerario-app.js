@@ -30,6 +30,7 @@ let filterHistory = [];
 
 // App Ready
 window.addEventListener("app:ready", async () => {
+    enforcePermissions();
     btnSave.addEventListener("click", saveStage);
     btnCancel.addEventListener("click", resetForm);
     searchInput.addEventListener("input", () => filterStages());
@@ -181,8 +182,8 @@ function renderTable(lista, isFilteredCall = false) {
             <td><span class="click-filter" data-col="detalle" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.detalle || "—"}</span></td>
             <td><span class="click-filter" data-col="otros" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.otros || "—"}</span></td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit" data-id="${s.id}">✏️</button>
-                <button class="btn btn-sm btn-outline btn-delete" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${s.id}">✕</button>
+                ${window.hasPermission("itinerario_editar") ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${s.id}">✏️</button>` : ""}
+                ${window.hasPermission("itinerario_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${s.id}">✕</button>` : ""}
             </td>
         `;
 
@@ -203,8 +204,15 @@ function renderTable(lista, isFilteredCall = false) {
             });
         });
 
-        tr.querySelector(".btn-edit").addEventListener("click", () => editStage(s));
-        tr.querySelector(".btn-delete").addEventListener("click", () => deleteStage(s.id));
+        const btnEdit = tr.querySelector(".btn-edit");
+        if (btnEdit) {
+            btnEdit.addEventListener("click", () => editStage(s));
+        }
+
+        const btnDelete = tr.querySelector(".btn-delete");
+        if (btnDelete) {
+            btnDelete.addEventListener("click", () => deleteStage(s.id));
+        }
         tbody.appendChild(tr);
     });
 }
@@ -575,4 +583,20 @@ function applyExcelFilter() {
     efMenu.style.display = "none";
     updateHeaderLabels();
     filterStages();
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Crear/Guardar itinerario
+    const formCard = document.getElementById("form-card");
+    if (formCard && !window.hasPermission("itinerario_crear") && !window.hasPermission("itinerario_guardar")) {
+        formCard.style.display = "none";
+        
+        // Hide the spacer card if it exists
+        const formSibling = formCard.nextElementSibling;
+        if (formSibling && formSibling.className === "card") {
+            // Keep table visible, but full-width if possible
+        }
+    }
 }

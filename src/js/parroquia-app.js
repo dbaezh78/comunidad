@@ -60,6 +60,7 @@ let filterHistory       = [];
 
 // ── App ready ────────────────────────────────────
 window.addEventListener("app:ready", async () => {
+    enforcePermissions();
     await loadRealidades();
     await loadParroquias();
     setupSortingListeners();
@@ -131,13 +132,19 @@ async function loadParroquias() {
     renderParroquiasTable(todasParroquias);
 }
 
-selParroquia.addEventListener("change", async () => {
-    const id = selParroquia.value;
+async function consultParroquiaById(id) {
     if (!id) { viewPanel.style.display = "none"; formPanel.style.display = "none"; return; }
     showLoading(true);
     const snap = await getDoc(doc(db, "parroquias", id));
     showLoading(false);
-    if (snap.exists()) showViewPanel({ id: snap.id, ...snap.data() });
+    if (snap.exists()) {
+        showViewPanel({ id: snap.id, ...snap.data() });
+        viewPanel.scrollIntoView({ behavior: "smooth" });
+    }
+}
+
+selParroquia.addEventListener("change", async () => {
+    await consultParroquiaById(selParroquia.value);
 });
 
 // ── Nueva parroquia ───────────────────────────────
@@ -363,8 +370,9 @@ function renderParroquiasTable(lista, isFilteredCall = false) {
             <td><span class="click-filter" data-col="telefono" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.telefono || "—"}</span></td>
             <td><span class="click-filter" data-col="direccion" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.direccion || "—"}</span></td>
             <td style="text-align:center;">
-                <button class="btn btn-sm btn-outline btn-edit-table" data-id="${p.id}">✏️</button>
-                <button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${p.id}">✕</button>
+                ${window.hasPermission("parroquia_consultar") ? `<button class="btn btn-sm btn-outline btn-view-table" data-id="${p.id}" title="Consultar parroquia" style="margin-right:4px;">👁️</button>` : ""}
+                ${window.hasPermission("parroquia_editar") ? `<button class="btn btn-sm btn-outline btn-edit-table" data-id="${p.id}" title="Editar parroquia">✏️</button>` : ""}
+                ${window.hasPermission("parroquia_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${p.id}" title="Eliminar parroquia">✕</button>` : ""}
             </td>
         `;
 
@@ -385,14 +393,28 @@ function renderParroquiasTable(lista, isFilteredCall = false) {
             });
         });
 
-        tr.querySelector(".btn-edit-table").addEventListener("click", () => {
-            selParroquia.value = p.id;
-            openEditForm(p);
-        });
+        const btnView = tr.querySelector(".btn-view-table");
+        if (btnView) {
+            btnView.addEventListener("click", () => {
+                selParroquia.value = p.id;
+                consultParroquiaById(p.id);
+            });
+        }
 
-        tr.querySelector(".btn-delete-table").addEventListener("click", () => {
-            deleteParroquiaById(p.id);
-        });
+        const btnEdit = tr.querySelector(".btn-edit-table");
+        if (btnEdit) {
+            btnEdit.addEventListener("click", () => {
+                selParroquia.value = p.id;
+                openEditForm(p);
+            });
+        }
+
+        const btnDelete = tr.querySelector(".btn-delete-table");
+        if (btnDelete) {
+            btnDelete.addEventListener("click", () => {
+                deleteParroquiaById(p.id);
+            });
+        }
 
         tbody.appendChild(tr);
     });
@@ -704,4 +726,47 @@ function applyExcelFilter() {
     updateHeaderLabels();
     filterParroquias();
 }
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // crear Nueva parroquia
+    const btnNueva = document.getElementById("btn-nueva-parroquia");
+    if (btnNueva && !window.hasPermission("parroquia_crear")) {
+        btnNueva.style.display = "none";
+    }
+
+    // Seleccionar parroquia para consultar
+    const selParroquia = document.getElementById("sel-parroquia");
+    if (selParroquia && !window.hasPermission("parroquia_consultar")) {
+        selParroquia.disabled = true;
+    }
+
+    // Editar parroquia
+    const btnEditParroquia = document.getElementById("btn-edit-parroquia");
+    if (btnEditParroquia && !window.hasPermission("parroquia_editar")) {
+        btnEditParroquia.style.display = "none";
+    }
+
+    // Buscar en Parroquia
+    const searchWrap = document.getElementById("search-parroquias");
+    if (searchWrap && !window.hasPermission("parroquia_buscar")) {
+        searchWrap.style.display = "none";
+    }
+
+    // Filtrar
+    if (!window.hasPermission("parroquia_filtrar")) {
+        // Disable column headers click/contextmenu sorting
+        const headers = ["nombre", "parroco", "telefono", "direccion"];
+        headers.forEach(h => {
+            const th = document.getElementById(`th-${h}`);
+            if (th) {
+                th.style.pointerEvents = "none";
+                th.style.cursor = "default";
+            }
+        });
+    }
+}
+
+
 

@@ -6,123 +6,9 @@
     <link rel="icon"       href="src/img/ico.ico" type="image/x-icon">
     <link rel="stylesheet" href="src/css/login.css">
     <link rel="stylesheet" href="src/css/app.css">
+    <link rel="stylesheet" href="src/css/permisos.css">
     <title>Control de Acceso y Permisos — Comunidad</title>
-    <style>
-        /* Estilos de pestañas simulando ResucitoV2 */
-        .resucito-tabs-main {
-            display: flex;
-            border-bottom: 2px solid #ddd;
-            margin-bottom: 15px;
-            background: #f1f5f9;
-            border-radius: 5px 5px 0 0;
-        }
-        .resucito-tab-main-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            background: none;
-            font-weight: 600;
-            color: #64748b;
-            cursor: pointer;
-            text-align: center;
-            border-bottom: 3px solid transparent;
-            font-size: 0.95rem;
-        }
-        .resucito-tab-main-btn.active {
-            color: #000;
-            border-bottom: 3px solid #dc3545;
-            background: #fff;
-        }
 
-        .resucito-tabs-sub {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 8px;
-            flex-wrap: wrap;
-        }
-        .resucito-tab-sub-btn {
-            border: 1px solid transparent;
-            background: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            color: #475569;
-            font-size: 0.85rem;
-            cursor: pointer;
-        }
-        .resucito-tab-sub-btn.active {
-            border-color: #dc3545;
-            color: #dc3545;
-            font-weight: 600;
-            background: #fdf2f2;
-        }
-
-        .permiso-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
-        }
-        .permiso-label {
-            font-weight: 600;
-            color: #334155;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .permiso-checkboxes {
-            display: flex;
-            gap: 16px;
-        }
-        .permiso-chk-label {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.8rem;
-            color: #475569;
-            cursor: pointer;
-        }
-        .permiso-chk-label input {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-        }
-
-        /* Panel de Cuenta */
-        .profile-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            padding: 30px 20px;
-        }
-        .profile-avatar {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid #dc3545;
-            margin-bottom: 15px;
-        }
-        .profile-role-badge {
-            background: #fdf2f2;
-            color: #dc3545;
-            border: 1px solid #fecaca;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 15px;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-    </style>
 </head>
 <body>
 
@@ -317,104 +203,16 @@
                     <div style="margin-top:20px;">
                         <h4 style="margin-bottom:12px; color:#1e293b;">Permisos Asignados</h4>
                         
-                        <div class="permiso-row" style="background:#fff3cd; border-color:#ffeeba;">
-                            <span class="permiso-label">👑 Acceso Total (* / Administrador)</span>
+                        <div class="permiso-row" style="background:#fff3cd; border-color:#ffeeba; margin-bottom:12px;">
+                            <span class="permiso-label" style="font-weight:bold; color:#856404;">👑 Acceso Total (* / Administrador)</span>
                             <div class="permiso-checkboxes">
-                                <label class="permiso-chk-label"><input type="checkbox" id="chk-admin-total"></label>
+                                <label class="permiso-chk-label"><input type="checkbox" id="chk-admin-total" style="width:20px; height:20px;"></label>
                             </div>
                         </div>
 
-                        <div id="permisos-lista">
-                            <!-- Sorteo -->
-                            <div class="permiso-row" data-page="sorteo">
-                                <span class="permiso-label">🎲 Sorteo</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Hermanos -->
-                            <div class="permiso-row" data-page="hermanos">
-                                <span class="permiso-label">👥 Hermanos</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Comunidad -->
-                            <div class="permiso-row" data-page="comunidad">
-                                <span class="permiso-label">🏠 Comunidad</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Catequistas -->
-                            <div class="permiso-row" data-page="catequistas">
-                                <span class="permiso-label">📖 Catequistas</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Itinerarios -->
-                            <div class="permiso-row" data-page="itinerarios">
-                                <span class="permiso-label">🗺️ Itinerario</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Parroquia -->
-                            <div class="permiso-row" data-page="parroquia">
-                                <span class="permiso-label">⛪ Parroquia</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Realidad -->
-                            <div class="permiso-row" data-page="realidad">
-                                <span class="permiso-label">📚 Realidad</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Códigos -->
-                            <div class="permiso-row" data-page="codigos">
-                                <span class="permiso-label">🔑 Códigos</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Usuarios -->
-                            <div class="permiso-row" data-page="usuarios">
-                                <span class="permiso-label">👥 Usuarios</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
-                            <!-- Permisos -->
-                            <div class="permiso-row" data-page="permisos">
-                                <span class="permiso-label">🛡️ Permisos</span>
-                                <div class="permiso-checkboxes">
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-leer"> Lectura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-escribir"> Escritura</label>
-                                    <label class="permiso-chk-label"><input type="checkbox" class="chk-borrar"> Borrar</label>
-                                </div>
-                            </div>
+                        <!-- Dynamic Permisos Checkbox Tree -->
+                        <div id="permisos-tree" class="tree-container">
+                            <!-- Populated dynamically by JS -->
                         </div>
 
                         <div class="btn-actions" style="margin-top:24px;">
