@@ -139,9 +139,17 @@ function renderCards(realidades) {
             ${r.historia ? `<div class="rc-historia" style="margin-top:8px;font-size:0.85rem;color:#555;border-top:1px solid #eee;padding-top:6px;"><strong>Historia:</strong><br>${r.historia.replace(/\n/g, '<br>')}</div>` : ""}
             ${r.itinerario ? `<div class="rc-itinerario" style="margin-top:8px;font-size:0.85rem;color:#555;border-top:1px solid #eee;padding-top:6px;"><strong>Itinerario de Formación:</strong><br>${r.itinerario.replace(/\n/g, '<br>')}</div>` : ""}
             <div style="margin-top:12px;">
+                ${window.hasPermission("realidad_consultar") ? `<button class="btn btn-sm btn-outline btn-view-r" data-id="${r.id}" style="margin-right:6px;">👁️ Ver</button>` : ""}
                 ${window.hasPermission("realidad_editar") ? `<button class="btn btn-sm btn-outline btn-editar-r" data-id="${r.id}">✏️ Editar</button>` : ""}
             </div>
         `;
+        const btnViewR = card.querySelector(".btn-view-r");
+        if (btnViewR) {
+            btnViewR.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openView(r);
+            });
+        }
         const btnEditR = card.querySelector(".btn-editar-r");
         if (btnEditR) {
             btnEditR.addEventListener("click", (e) => {
@@ -153,8 +161,17 @@ function renderCards(realidades) {
     });
 }
 
+function enableAllInputs() {
+    const inputs = formCard.querySelectorAll("input, select, textarea, button");
+    inputs.forEach(input => {
+        input.disabled = false;
+    });
+    enforcePermissions();
+}
+
 // ── Nueva realidad ────────────────────────────────
 btnNueva.addEventListener("click", () => {
+    enableAllInputs();
     editingId = null;
     rNombre.value      = "";
     rWeb.value         = "";
@@ -172,6 +189,7 @@ btnNueva.addEventListener("click", () => {
 
 // ── Editar realidad ───────────────────────────────
 function openEdit(r) {
+    enableAllInputs();
     editingId          = r.id;
     rNombre.value      = r.nombre || "";
     rWeb.value         = r.web || "";
@@ -182,15 +200,36 @@ function openEdit(r) {
     catInput.value     = r.catequistaNombre || "";
     catId.value        = r.catequistaId     || "";
     formTitle.textContent   = `✏️ Editar: ${r.nombre}`;
-    btnDelete.style.display = "inline-flex";
+    btnDelete.style.display = (window.hasPermission && window.hasPermission("realidad_eliminar")) ? "inline-flex" : "none";
     formCard.style.display  = "block";
     formCard.scrollIntoView({ behavior: "smooth" });
+}
+
+function openView(r) {
+    openEdit(r);
+    formTitle.textContent = `👁️ Consultar: ${r.nombre}`;
+    
+    // Disable all inputs except cancel button
+    const inputs = formCard.querySelectorAll("input, select, textarea, button:not(#btn-cancel-realidad)");
+    inputs.forEach(input => {
+        if (input.id === "btn-delete-realidad") return;
+        input.disabled = true;
+    });
+
+    // Hide save button
+    const btnSave = document.getElementById("btn-save-realidad");
+    if (btnSave) btnSave.style.display = "none";
+    
+    // Hide delete button
+    const btnDelete = document.getElementById("btn-delete-realidad");
+    if (btnDelete) btnDelete.style.display = "none";
 }
 
 // ── Cancelar ──────────────────────────────────────
 btnCancel.addEventListener("click", () => {
     formCard.style.display = "none";
     editingId = null;
+    enableAllInputs();
 });
 
 // ── Guardar ───────────────────────────────────────

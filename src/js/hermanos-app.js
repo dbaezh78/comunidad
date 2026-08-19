@@ -576,10 +576,16 @@ function renderTable(lista) {
             <td style="text-align:center;">${razonBadge}</td>
             <td style="text-align:center;">${locIcon}</td>
             <td style="text-align:center;">
+                ${window.hasPermission("hermanos_ver") ? `<button class="btn btn-sm btn-outline btn-view" data-id="${h.id}" title="Ver hermano" style="margin-right:4px;">👁️</button>` : ""}
                 ${window.hasPermission("hermanos_editar") ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${h.id}">✏️</button>` : ""}
             </td>
         `;
         
+        const btnView = tr.querySelector(".btn-view");
+        if (btnView) {
+            btnView.addEventListener("click", () => openViewForm(h));
+        }
+
         const btnEdit = tr.querySelector(".btn-edit");
         if (btnEdit) {
             btnEdit.addEventListener("click", () => openEditForm(h));
@@ -786,9 +792,29 @@ async function openEditForm(h) {
         btnLocation.classList.add("got");
     }
     
-    btnDelete.style.display = "inline-flex";
+    btnDelete.style.display = (window.hasPermission && window.hasPermission("hermanos_eliminar")) ? "inline-flex" : "none";
     listPanel.style.display = "none";
     formPanel.style.display = "block";
+}
+
+async function openViewForm(h) {
+    await openEditForm(h);
+    formTitle.textContent = `👁️ Consultar: ${h.primerNombre} ${h.primerApellido}`;
+    
+    // Disable all inputs in the form
+    const inputs = formPanel.querySelectorAll("input, select, textarea, button:not(#btn-cancel)");
+    inputs.forEach(input => {
+        if (input.id === "btn-delete") return;
+        input.disabled = true;
+    });
+
+    // Hide save button
+    const btnSave = document.getElementById("btn-save");
+    if (btnSave) btnSave.style.display = "none";
+    
+    // Hide delete button
+    const btnDelete = document.getElementById("btn-delete");
+    if (btnDelete) btnDelete.style.display = "none";
 }
 
 btnCancel.addEventListener("click", () => {
@@ -797,6 +823,14 @@ btnCancel.addEventListener("click", () => {
 });
 
 function clearForm() {
+    const inputs = formPanel.querySelectorAll("input, select, textarea, button");
+    inputs.forEach(input => {
+        input.disabled = false;
+    });
+
+    // Re-enforce normal permissions (like if they don't have hermanos_cambiar_activo)
+    enforcePermissions();
+
     hActivo.value = "true";
     hParroquia.value = "";
     hComunidad.innerHTML = '<option value="">— Primero parroquia —</option>';

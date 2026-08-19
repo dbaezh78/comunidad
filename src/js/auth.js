@@ -185,7 +185,7 @@ async function allowUserAccess(user) {
         "catequista.html": () => window.hasPermission("catequista_ver_hilos") || window.hasPermission("catequista_ver_asignacion") || window.hasPermission("catequista_ver_catequistas"),
         "comunidad.html": () => window.hasPermission("comunidad_consultar") || window.hasPermission("comunidad_ver_hermanos"),
         "hermanos.html": () => window.hasPermission("hermanos_buscar") || window.hasPermission("hermanos_ver"),
-        "realidad.html": () => window.hasPermission("realidad_ver"),
+        "realidad.html": () => window.hasPermission("realidad_ver") || window.hasPermission("realidad_consultar"),
         "itinerario.html": () => window.hasPermission("itinerario_ver"),
         "sortear.html": () => window.hasPermission("sortear_ver"),
         "codComunidad.html": () => window.hasPermission("codigo_ver"),
@@ -230,7 +230,7 @@ async function allowUserAccess(user) {
         if (window.hasPermission("hermanos_buscar") || window.hasPermission("hermanos_ver")) {
             html += `<a href="hermanos.html" class="nav-link ${basePage === 'hermanos.html' ? 'active' : ''}"><span class="nav-icon">👨‍👩‍👧‍👦</span> Hermanos</a>`;
         }
-        if (window.hasPermission("realidad_ver")) {
+        if (window.hasPermission("realidad_ver") || window.hasPermission("realidad_consultar")) {
             html += `<a href="realidad.html" class="nav-link ${basePage === 'realidad.html' ? 'active' : ''}"><span class="nav-icon">📚</span> Realidad</a>`;
         }
         if (window.hasPermission("itinerario_ver")) {

@@ -525,12 +525,12 @@ const PERMISSIONS_TREE = [
     label: "Hermanos",
     children: [
       { id: "hermanos_buscar", label: "Buscar" },
-      { id: "hermanos_crear", label: "Crear Nuevo Hermano" },
-      { id: "hermanos_ver", label: "Ver hermano creado" },
-      { id: "hermanos_editar", label: "Editar hermano creado" },
-      { id: "hermanos_eliminar", label: "Eliminar hermano Creado" },
-      { id: "hermanos_guardar", label: "Guardar Hermano creado o modificado" },
-      { id: "hermanos_cambiar_activo", label: "Cambiar de Activo a No Activo en edicion de hermano" }
+      { id: "hermanos_crear", label: "Nuevo hermano" },
+      { id: "hermanos_ver", label: "Ver hermano" },
+      { id: "hermanos_editar", label: "Editar hermano" },
+      { id: "hermanos_eliminar", label: "Eliminar hermano" },
+      { id: "hermanos_guardar", label: "Guardar hermano" },
+      { id: "hermanos_cambiar_activo", label: "Permiso de Activo a No Activo" }
     ]
   },
   {
@@ -539,6 +539,7 @@ const PERMISSIONS_TREE = [
     children: [
       { id: "realidad_ver", label: "Ver tarjeta de realidad" },
       { id: "realidad_crear", label: "Crear Nueva Realidad" },
+      { id: "realidad_consultar", label: "Ver" },
       { id: "realidad_editar", label: "Editar" },
       { id: "realidad_eliminar", label: "Eliminar" }
     ]

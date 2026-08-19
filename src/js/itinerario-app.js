@@ -182,6 +182,7 @@ function renderTable(lista, isFilteredCall = false) {
             <td><span class="click-filter" data-col="detalle" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.detalle || "—"}</span></td>
             <td><span class="click-filter" data-col="otros" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.otros || "—"}</span></td>
             <td style="text-align:center;">
+                ${window.hasPermission("itinerario_ver") ? `<button class="btn btn-sm btn-outline btn-view" data-id="${s.id}" style="margin-right:4px;">👁️</button>` : ""}
                 ${window.hasPermission("itinerario_editar") ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${s.id}">✏️</button>` : ""}
                 ${window.hasPermission("itinerario_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${s.id}">✕</button>` : ""}
             </td>
@@ -203,6 +204,11 @@ function renderTable(lista, isFilteredCall = false) {
                 }
             });
         });
+
+        const btnView = tr.querySelector(".btn-view");
+        if (btnView) {
+            btnView.addEventListener("click", () => viewStage(s));
+        }
 
         const btnEdit = tr.querySelector(".btn-edit");
         if (btnEdit) {
@@ -418,7 +424,19 @@ async function saveStage() {
     }
 }
 
+function enableAllInputs() {
+    const formCard = document.getElementById("form-card");
+    if (formCard) {
+        const inputs = formCard.querySelectorAll("input, select, textarea, button");
+        inputs.forEach(input => {
+            input.disabled = false;
+        });
+    }
+    enforcePermissions();
+}
+
 function editStage(s) {
+    enableAllInputs();
     editingId = s.id;
     inputNombre.value = s.nombre;
     inputDetalle.value = s.detalle || "";
@@ -428,6 +446,23 @@ function editStage(s) {
     formTitle.textContent = "✏️ Editar Etapa de Itinerario";
     btnCancel.style.display = "inline-block";
     btnSave.textContent = "💾 Guardar Cambios";
+}
+
+function viewStage(s) {
+    editStage(s);
+    formTitle.textContent = "👁️ Consultar Etapa de Itinerario";
+    
+    // Disable inputs in formCard except cancel button
+    const formCard = document.getElementById("form-card");
+    if (formCard) {
+        const inputs = formCard.querySelectorAll("input, select, textarea, button:not(#btn-cancel)");
+        inputs.forEach(input => {
+            input.disabled = true;
+        });
+    }
+
+    // Hide Save Button
+    btnSave.style.display = "none";
 }
 
 async function deleteStage(id) {
@@ -448,6 +483,7 @@ async function deleteStage(id) {
 }
 
 function resetForm() {
+    enableAllInputs();
     editingId = null;
     inputNombre.value = "";
     inputDetalle.value = "";
@@ -588,15 +624,15 @@ function applyExcelFilter() {
 function enforcePermissions() {
     if (!window.hasPermission) return;
 
-    // Crear/Guardar itinerario
+    // Crear/Guardar itinerario card visibility
     const formCard = document.getElementById("form-card");
     if (formCard && !window.hasPermission("itinerario_crear") && !window.hasPermission("itinerario_guardar")) {
         formCard.style.display = "none";
-        
-        // Hide the spacer card if it exists
-        const formSibling = formCard.nextElementSibling;
-        if (formSibling && formSibling.className === "card") {
-            // Keep table visible, but full-width if possible
-        }
+    }
+
+    // Hide Save Button in form if no itinerario_guardar permission
+    const btnSave = document.getElementById("btn-save-itinerario");
+    if (btnSave && !window.hasPermission("itinerario_guardar")) {
+        btnSave.style.display = "none";
     }
 }
