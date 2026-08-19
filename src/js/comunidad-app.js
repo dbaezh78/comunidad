@@ -29,6 +29,8 @@ const cCatequistaParroquia = document.getElementById("c-catequista-parroquia");
 const cCatequistaComunidad = document.getElementById("c-catequista-comunidad");
 const cCatequistaHermano   = document.getElementById("c-catequista-hermano");
 const dCatequista        = document.getElementById("d-catequista");
+const dEtapa             = document.getElementById("d-etapa");
+const cEtapa             = document.getElementById("c-etapa");
 const dActivos           = document.getElementById("d-activos");
 const dInactivos         = document.getElementById("d-inactivos");
 
@@ -51,6 +53,8 @@ let currentComunidadId   = null;
 let currentComunidadData = null;
 let allHermanos          = [];        // hermanos del sistema para busqueda
 let responsablesAsignados = {};       // { 1: {hermanoId, parejaId, esCasado}, ... }
+let cachedParroquias     = {};        // parroquiaId -> nombre
+let todasComunidades     = [];        // all communities in system
 let isCreatingNew        = false;
 
 const NUMS_RESP = ["","1ro","2do","3ro","4to","5to","6to","7mo","8vo"];
@@ -58,18 +62,39 @@ const NUMS_RESP = ["","1ro","2do","3ro","4to","5to","6to","7mo","8vo"];
 // ── App ready ────────────────────────────────────
 window.addEventListener("app:ready", async () => {
     await loadParroquias();
+    await loadItinerarios();
+    await loadAllComunidades();
     setupCatequistaSelectors();
+
+    const searchInput = document.getElementById("search-comunidades");
+    if (searchInput) {
+        searchInput.addEventListener("input", filterComunidades);
+    }
 });
+
+async function loadItinerarios() {
+    cEtapa.innerHTML = '<option value="">— Seleccionar Etapa —</option>';
+    try {
+        const snap = await getDocs(query(collection(db, "itinerario"), orderBy("createdAt", "asc")));
+        snap.forEach(d => {
+            cEtapa.appendChild(new Option(d.data().nombre, d.id));
+        });
+    } catch(e) {
+        console.error("Error loading stages list:", e);
+    }
+}
 
 // ── Parroquias ────────────────────────────────────
 async function loadParroquias() {
     const snap = await getDocs(collection(db, "parroquias"));
     selParroquia.innerHTML = '<option value="">— Seleccionar —</option>';
     cCatequistaParroquia.innerHTML = '<option value="">— Seleccionar parroquia —</option>';
+    cachedParroquias = {};
     snap.forEach(d => {
         const opt = new Option(d.data().nombre, d.id);
         selParroquia.appendChild(opt);
         cCatequistaParroquia.appendChild(new Option(d.data().nombre, d.id));
+        cachedParroquias[d.id] = d.data().nombre;
     });
 }
 
@@ -170,6 +195,7 @@ btnNueva.addEventListener("click", async () => {
     cFecha.value  = "";
     cTipo.value   = "normal";
     cOrigen.value = "";
+    cEtapa.value  = "";
     origenWrap.style.display = "none";
 
     // Limpiar Catequista
@@ -206,6 +232,7 @@ async function loadComunidad() {
     const nombreParroquia = pSnap.exists() ? pSnap.data().nombre : currentParroquiaId;
 
     renderDatosView(currentComunidadData, nombreParroquia);
+    await loadCommunityCode(currentComunidadId);
     await loadHermanos();
 
     mainPanel.style.display = "block";
@@ -232,6 +259,9 @@ function renderDatosView(c, nombreParroquia) {
         ? (c.catequistaTelefono ? `${c.catequistaNombre} (${c.catequistaTelefono})` : c.catequistaNombre) 
         : "—";
 
+    // Mostrar etapa
+    dEtapa.textContent = c.etapaNombre || "—";
+
     const origenWrapView = document.getElementById("d-origen-wrap");
     if (c.comunidadesOrigen?.length) {
         document.getElementById("d-origen").textContent = c.comunidadesOrigen.join(", ");
@@ -254,6 +284,7 @@ btnToggleDatos.addEventListener("click", async () => {
     cFecha.value  = c.fechaFormacion || "";
     cTipo.value   = c.tipo || "normal";
     cOrigen.value = (c.comunidadesOrigen || []).join(", ");
+    cEtapa.value  = c.etapaId || "";
     origenWrap.style.display = (c.tipo !== "normal") ? "block" : "none";
 
     // Pre-cargar selectores de catequista si tiene uno guardado
@@ -342,10 +373,15 @@ btnSaveDatos.addEventListener("click", async () => {
         }
     }
 
+    const etapaId = cEtapa.value || null;
+    const etapaNombre = etapaId ? cEtapa.options[cEtapa.selectedIndex].text : null;
+
     const data = {
         numero:             numToSave,
         fechaFormacion:     cFecha.value || null,
         tipo:               cTipo.value,
+        etapaId:            etapaId,
+        etapaNombre:        etapaNombre,
         catequistaId:       catId,
         catequistaNombre:   catNombre,
         catequistaTelefono: catTelefono,
@@ -390,6 +426,7 @@ btnSaveDatos.addEventListener("click", async () => {
             datosView.style.display = "block";
             showAlert("✅ Datos guardados.", "success");
         }
+        await loadAllComunidades();
     } catch (err) { showAlert("Error: " + err.message, "error"); }
     finally { btnSaveDatos.disabled = false; }
 });
@@ -397,11 +434,15 @@ btnSaveDatos.addEventListener("click", async () => {
 btnDeleteComunidad.addEventListener("click", async () => {
     if (!currentComunidadId) return;
 
-    if (!confirm("⚠️ ¿Estás seguro de que deseas eliminar esta comunidad permanentemente? Se perderán todos sus datos y los hermanos de esta comunidad quedarán sin comunidad asignada.")) return;
+    const confirmClear = await window.customConfirm(
+        "Eliminar Comunidad",
+        "¿Estás seguro de que deseas eliminar esta comunidad permanentemente? Se perderán todos sus datos y los hermanos de esta comunidad quedarán sin comunidad asignada.",
+        { icon: "⚠️", danger: true }
+    );
+    if (!confirmClear) return;
 
     btnDeleteComunidad.disabled = true;
     try {
-        // Desvincular hermanos pertenecientes a esta comunidad
         const snap = await getDocs(query(
             collection(db, "hermanos"),
             where("comunidadId", "==", currentComunidadId)
@@ -417,10 +458,8 @@ btnDeleteComunidad.addEventListener("click", async () => {
         });
         await Promise.all(batchUpdates);
 
-        // Borrar el documento de la comunidad
         await deleteDoc(doc(db, "parroquias", currentParroquiaId, "comunidades", currentComunidadId));
 
-        // Remover del selector
         const opt = selComunidad.querySelector(`option[value="${currentComunidadId}"]`);
         if (opt) opt.remove();
 
@@ -429,6 +468,7 @@ btnDeleteComunidad.addEventListener("click", async () => {
         currentComunidadData = null;
 
         mainPanel.style.display = "none";
+        await loadAllComunidades();
         showAlert("🗑️ Comunidad eliminada permanentemente.", "success");
     } catch(err) {
         showAlert("Error al eliminar comunidad: " + err.message, "error");
@@ -645,4 +685,230 @@ function showAlert(msg, type = "info") {
     globalAlert.className   = `alert alert-${type} visible`;
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (type === "success") setTimeout(() => { globalAlert.className = "alert"; }, 3500);
+}
+
+async function loadCommunityCode(comunidadId) {
+    if (!comunidadId) {
+        document.getElementById("comunidad-codigo-widget").style.display = "none";
+        return;
+    }
+    document.getElementById("comunidad-codigo-widget").style.display = "flex";
+    
+    const codeInput = document.getElementById("comunidad-codigo-val");
+    codeInput.value = "Cargando...";
+    
+    try {
+        const snap = await getDocs(query(collection(db, "codigos"), where("comunidadId", "==", comunidadId)));
+        let latestCodeDoc = null;
+        snap.forEach(d => {
+            const data = d.data();
+            if (!latestCodeDoc || data.createdAt > latestCodeDoc.createdAt) {
+                latestCodeDoc = { id: d.id, ...data };
+            }
+        });
+        
+        if (latestCodeDoc) {
+            codeInput.value = latestCodeDoc.id;
+            if (latestCodeDoc.usadoPorEmail) {
+                codeInput.style.background = "#ffebee";
+                codeInput.title = `Usado por: ${latestCodeDoc.usadoPorEmail}`;
+            } else {
+                codeInput.style.background = "#e8f5e9";
+                codeInput.title = "Código activo y listo para usar";
+            }
+        } else {
+            codeInput.value = "";
+            codeInput.placeholder = "Sin código generado";
+            codeInput.style.background = "#f5f5f5";
+            codeInput.title = "";
+        }
+    } catch(e) {
+        console.error("Error loading code:", e);
+        codeInput.value = "Error al cargar";
+    }
+}
+
+function generateUUID32() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let result = "";
+    for (let i = 0; i < 32; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+document.getElementById("btn-generate-code").addEventListener("click", async () => {
+    if (!currentComunidadId) return;
+    if (!confirm("¿Deseas generar un nuevo código de invitación de 32 caracteres para esta comunidad?")) return;
+    
+    const newCode = generateUUID32();
+    try {
+        await setDoc(doc(db, "codigos", newCode), {
+            comunidadId: currentComunidadId,
+            parroquiaId: currentParroquiaId,
+            createdAt: new Date().toISOString(),
+            usadoPorEmail: null
+        });
+        await loadCommunityCode(currentComunidadId);
+        showAlert("🔑 Código generado con éxito.", "success");
+    } catch(e) {
+        showAlert("Error al generar código: " + e.message, "error");
+    }
+});
+
+document.getElementById("btn-copy-code").addEventListener("click", () => {
+    const val = document.getElementById("comunidad-codigo-val").value;
+    if (!val || val === "Sin código" || val.startsWith("Cargando")) return;
+    navigator.clipboard.writeText(val);
+    showAlert("📋 Código copiado al portapapeles.", "success");
+});
+
+// ── Listado General de Comunidades ────────────────
+import { collectionGroup } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+
+async function loadAllComunidades() {
+    try {
+        const snap = await getDocs(collectionGroup(db, "comunidades"));
+        todasComunidades = [];
+        snap.forEach(d => {
+            const data = d.data();
+            const parroquiaId = d.ref.parent.parent.id;
+            const pNombre = cachedParroquias[parroquiaId] || "Parroquia Desconocida";
+            
+            todasComunidades.push({
+                id: d.id,
+                parroquiaId,
+                parroquiaNombre: pNombre,
+                ...data
+            });
+        });
+
+        // Ordenar por nombre de Parroquia y luego por número de Comunidad
+        todasComunidades.sort((a, b) => {
+            const pComp = a.parroquiaNombre.localeCompare(b.parroquiaNombre);
+            if (pComp !== 0) return pComp;
+            return String(a.numero).localeCompare(String(b.numero), undefined, {numeric: true});
+        });
+
+        renderComunidadesTable(todasComunidades);
+    } catch(e) {
+        console.error("Error al cargar listado de comunidades:", e);
+    }
+}
+
+function renderComunidadesTable(lista) {
+    const tbody = document.getElementById("comunidad-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:15px; color:#999;">No se encontraron comunidades.</td></tr>';
+        return;
+    }
+
+    lista.forEach(c => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td><strong>${c.parroquiaNombre}</strong></td>
+            <td>Comunidad ${c.numero}</td>
+            <td><span class="badge-rol badge-hno" style="text-transform:capitalize;">${c.tipo || "Normal"}</span></td>
+            <td><span style="font-weight:600; color:#475569;">${c.etapaNombre || "—"}</span></td>
+            <td>${c.catequistaNombre ? `${c.catequistaNombre} ${c.catequistaTelefono ? `(${c.catequistaTelefono})` : ""}` : "—"}</td>
+            <td style="text-align:center;">
+                <button class="btn btn-sm btn-outline btn-edit-table" data-id="${c.id}">✏️</button>
+                <button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${c.id}">✕</button>
+            </td>
+        `;
+
+        tr.querySelector(".btn-edit-table").addEventListener("click", () => {
+            selectAndEditCommunity(c);
+        });
+
+        tr.querySelector(".btn-delete-table").addEventListener("click", async () => {
+            const confirmDelete = await window.customConfirm(
+                "Eliminar Comunidad",
+                `¿Estás seguro de que deseas eliminar la Comunidad ${c.numero} de la parroquia ${c.parroquiaNombre}?\nSe desvincularán todos sus hermanos.`,
+                { icon: "⚠️", danger: true }
+            );
+            if (!confirmDelete) return;
+
+            try {
+                // Desvincular hermanos
+                const hSnap = await getDocs(query(collection(db, "hermanos"), where("comunidadId", "==", c.id)));
+                const batch = [];
+                hSnap.forEach(hd => {
+                    batch.push(updateDoc(doc(db, "hermanos", hd.id), {
+                        comunidadId: null,
+                        esResponsable: false,
+                        posicionResponsable: null
+                    }));
+                });
+                await Promise.all(batch);
+
+                await deleteDoc(doc(db, "parroquias", c.parroquiaId, "comunidades", c.id));
+
+                if (currentComunidadId === c.id) {
+                    currentComunidadId = null;
+                    currentComunidadData = null;
+                    mainPanel.style.display = "none";
+                    selComunidad.value = "";
+                }
+
+                // Quitar del selector si está cargado
+                const opt = selComunidad.querySelector(`option[value="${c.id}"]`);
+                if (opt) opt.remove();
+
+                await loadAllComunidades();
+                showAlert("🗑️ Comunidad eliminada.", "success");
+            } catch(err) {
+                showAlert("Error: " + err.message, "error");
+            }
+        });
+
+        tbody.appendChild(tr);
+    });
+}
+
+function filterComunidades() {
+    const q = document.getElementById("search-comunidades").value.toLowerCase().trim();
+    if (!q) {
+        renderComunidadesTable(todasComunidades);
+        return;
+    }
+
+    const filtered = todasComunidades.filter(c => {
+        const pNom = (c.parroquiaNombre || "").toLowerCase();
+        const cNum = `comunidad ${c.numero}`.toLowerCase();
+        const cEtapa = (c.etapaNombre || "").toLowerCase();
+        const cCat = (c.catequistaNombre || "").toLowerCase();
+        return pNom.includes(q) || cNum.includes(q) || cEtapa.includes(q) || cCat.includes(q);
+    });
+    renderComunidadesTable(filtered);
+}
+
+async function loadComunidadesDropdownForParroquia(pid) {
+    const snap = await getDocs(collection(db, "parroquias", pid, "comunidades"));
+    selComunidad.innerHTML = '<option value="">— Seleccionar comunidad —</option>';
+    snap.forEach(d => {
+        const num = d.data().numero || d.id;
+        selComunidad.appendChild(new Option(`Comunidad ${num}`, d.id));
+    });
+    selComunidad.disabled = false;
+}
+
+async function selectAndEditCommunity(c) {
+    selParroquia.value = c.parroquiaId;
+    currentParroquiaId = c.parroquiaId;
+    await loadComunidadesDropdownForParroquia(c.parroquiaId);
+    
+    selComunidad.value = c.id;
+    currentComunidadId = c.id;
+    
+    await loadComunidad();
+    
+    // Cambiar al panel de edición inmediatamente
+    const editing = datosForm.style.display !== "none";
+    if (!editing) {
+        btnToggleDatos.click();
+    }
 }

@@ -30,6 +30,9 @@
     background: var(--primary);
     border-bottom: 3px solid var(--accent);
     flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
 }
 
 .nav-logo {
@@ -245,7 +248,7 @@
 }
 .btn-outline:hover { border-color: var(--primary); background: var(--bg); }
 
-.btn-sm { padding: 2px 2px; font-size: 0.82rem; }
+.btn-sm { padding: 2px 2px; font-size: 0.82rem; padding: inherit; }
 /*.btn-sm { padding: 6px 12px; font-size: 0.82rem; }*/
 
 .btn:disabled {
@@ -304,7 +307,7 @@
 }
 
 .hermanos-table td {
-    padding: 8px 4px;
+    padding: 4px 4px;
     border-bottom: 1px solid var(--border);
     color: var(--text);
     vertical-align: middle;

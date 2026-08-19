@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -14,7 +14,7 @@
 <div id="login-overlay" class="login-overlay">
     <div class="login-card">
         <div class="login-logo">⛪</div>
-        <h2>Comunidad 4</h2>
+        <h2>Santa Iglesia Católica</h2>
         <p class="subtitle">Inicia sesión para continuar</p>
         <button id="btn-google" class="btn-google">
             <svg class="google-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -34,13 +34,17 @@
 <div id="app-content" style="display:none;">
 
     <nav class="nav-bar">
-        <span class="nav-logo">⛪ Comunidad</span>
-        <a href="index.html"     class="nav-link"><span class="nav-icon">🎲</span> Sorteo</a>
+        <span class="nav-logo">⛪ Santa Iglesia Católica</span>
+        <a href="index.html"     class="nav-link"><span class="nav-icon">🧩</span> Módulos</a>
+        <a href="sortear.html"   class="nav-link"><span class="nav-icon">🎲</span> Sorteo</a>
         <a href="hermanos.html"  class="nav-link"><span class="nav-icon">👥</span> Hermanos</a>
         <a href="comunidad.html" class="nav-link"><span class="nav-icon">🏠</span> Comunidad</a>
+        <a href="catequista.html" class="nav-link"><span class="nav-icon">📖</span> Catequistas</a>
+        <a href="itinerario.html" class="nav-link"><span class="nav-icon">🗺️</span> Itinerario</a>
         <a href="parroquia.html" class="nav-link"><span class="nav-icon">⛪</span> Parroquia</a>
         <a href="realidad.html"  class="nav-link"><span class="nav-icon">📚</span> Realidad</a>
-        <a href="modulos.html"   class="nav-link"><span class="nav-icon">🧩</span> Módulos</a>
+        <a href="codComunidad.html" class="nav-link"><span class="nav-icon">🔑</span> Códigos</a>
+        <a href="permisos.html"  class="nav-link"><span class="nav-icon">🛡️</span> Permisos</a>
     </nav>
 
     <div id="top-bar" class="top-bar" style="display:none;">
@@ -64,6 +68,30 @@
                 <div class="form-group" style="align-self:flex-end;">
                     <button id="btn-nueva-parroquia" class="btn btn-success">+ Nueva Parroquia</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Listado de Parroquias Registradas -->
+        <div class="card" id="listado-parroquias-card" style="margin-bottom: 24px;">
+            <div class="card-title" style="justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                <span>📋 Parroquias Registradas</span>
+                <input type="text" id="search-parroquias" placeholder="Buscar parroquia..." style="width:250px; padding:6px; font-size:0.82rem; border-radius:4px; border:1px solid #ccc;">
+            </div>
+            <div style="overflow-x:auto; margin-top:15px;">
+                <table class="hermanos-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre de la Parroquia</th>
+                            <th>Párroco</th>
+                            <th>Teléfono</th>
+                            <th>Dirección</th>
+                            <th style="text-align:center; width:120px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="parroquia-tbody">
+                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando parroquias...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 

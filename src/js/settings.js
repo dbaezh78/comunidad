@@ -264,6 +264,8 @@ function setupModalInteractions() {
 
             if (targetId === "tab-datos") {
                 loadCarismas();
+            } else if (targetId === "tab-codigos") {
+                loadAllInviteCodes();
             }
         });
     });
@@ -430,6 +432,56 @@ function clearCarismaForm() {
     document.getElementById("sg-carisma-name").value = "";
     document.getElementById("sg-carisma-icon").value = "";
     document.getElementById("sg-add-carisma").textContent = "Guardar";
+}
+
+async function loadAllInviteCodes() {
+    const listContainer = document.getElementById("sg-codigos-list");
+    if (!listContainer) return;
+    listContainer.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:12px; color:#666;">Cargando...</td></tr>';
+
+    try {
+        const codeSnap = await getDocs(query(collection(db, "codigos"), orderBy("createdAt", "desc")));
+        const parishesSnap = await getDocs(collection(db, "parroquias"));
+        const parishesMap = {};
+        const communitiesMap = {};
+
+        parishesSnap.forEach(pDoc => {
+            parishesMap[pDoc.id] = pDoc.data().nombre;
+        });
+
+        for (let pId of Object.keys(parishesMap)) {
+            const comsSnap = await getDocs(collection(db, "parroquias", pId, "comunidades"));
+            comsSnap.forEach(cDoc => {
+                communitiesMap[cDoc.id] = cDoc.data().numero || cDoc.id;
+            });
+        }
+
+        if (codeSnap.empty) {
+            listContainer.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:12px; color:#999;">No hay códigos generados.</td></tr>';
+            return;
+        }
+
+        listContainer.innerHTML = "";
+        codeSnap.forEach(d => {
+            const data = d.data();
+            const pNombre = parishesMap[data.parroquiaId] || "—";
+            const cNombre = communitiesMap[data.comunidadId] ? `Comunidad ${communitiesMap[data.comunidadId]}` : "—";
+            const usadoPor = data.usadoPorEmail 
+                ? `<span style="color:#2ecc71; font-weight:600;">✅ ${data.usadoPorEmail}</span>` 
+                : `<span style="color:#e67e22; font-weight:600;">Disponible</span>`;
+
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="font-family:monospace; font-weight:600; padding:6px 10px;">${d.id}</td>
+                <td style="padding:6px 10px;">${pNombre}</td>
+                <td style="padding:6px 10px;">${cNombre}</td>
+                <td style="padding:6px 10px;">${usadoPor}</td>
+            `;
+            listContainer.appendChild(tr);
+        });
+    } catch(err) {
+        listContainer.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red; padding:12px;">Error: ${err.message}</td></tr>`;
+    }
 }
 
 // Inicializar bindings al detectar que la app está lista

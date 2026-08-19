@@ -55,14 +55,24 @@ let todosHermanos        = [];
 let todosCarismas        = [];
 let cachedParroquias     = {}; // id -> nombre
 let cachedComunidades    = {}; // id -> nombre (Comunidad X)
+let catechistMap         = {}; // hermanoId -> array of community names
 let currentSortColumn    = "nombre";
 let currentSortDir       = "asc";
 let activeFilters        = { nombre: [], parroquia: [], comunidad: [], telefono: [], responsable: [] };
 let editingId            = null;
 let originalSpouseId     = null;
 let currentHijosList     = []; // Lista temporal de hijos para edicion [{nombre, cumple}]
+let currentUserRole      = "hermano";
 
-window.addEventListener("app:ready", async () => {
+window.addEventListener("app:ready", async (e) => {
+    const user = e.detail;
+    try {
+        const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
+        if (uSnap.exists()) {
+            currentUserRole = uSnap.data().rol || "hermano";
+        }
+    } catch(err) { console.error(err); }
+
     await loadParroquias();
     await cacheAllComunidades();
     await loadCarismas();
@@ -82,8 +92,25 @@ window.addEventListener("app:ready", async () => {
 async function cacheAllComunidades() {
     try {
         const snap = await getDocs(collectionGroup(db, "comunidades"));
+        catechistMap = {};
         snap.forEach(d => {
-            cachedComunidades[d.id] = `Comunidad ${d.data().numero || d.id}`;
+            const data = d.data();
+            const cName = `Comunidad ${data.numero || d.id}`;
+            cachedComunidades[d.id] = cName;
+            
+            if (data.catequistaId) {
+                const parroquiaId = d.ref.parent.parent.id;
+                const pNombre = cachedParroquias[parroquiaId] || "Parroquia Desconocida";
+                const cNum = data.numero || d.id;
+                
+                if (!catechistMap[data.catequistaId]) {
+                    catechistMap[data.catequistaId] = {};
+                }
+                if (!catechistMap[data.catequistaId][pNombre]) {
+                    catechistMap[data.catequistaId][pNombre] = [];
+                }
+                catechistMap[data.catequistaId][pNombre].push(cNum);
+            }
         });
     } catch(e) {
         console.error("Error caching communities:", e);
@@ -402,6 +429,7 @@ async function loadHermanos() {
 }
 
 function renderTable(lista) {
+    renderActiveFilterChips();
     let filteredList = [...lista];
     const loggedEmail = auth.currentUser?.email;
     if (loggedEmail) {
@@ -523,9 +551,23 @@ function renderTable(lista) {
             activoBadge = `<span style="margin-left:8px; font-size:0.68rem; background:#f8d7da; color:#721c24; padding:2px 6px; border-radius:4px; font-weight:600; font-family:'Segoe UI',sans-serif;">Inactivo</span>`;
         }
 
+        const hId = h.id;
+        const isCatequista = catechistMap[hId] && Object.keys(catechistMap[hId]).length > 0;
+        let tooltipText = "";
+        if (isCatequista) {
+            const pParts = [];
+            for (const [pName, cNums] of Object.entries(catechistMap[hId])) {
+                pParts.push(`${pName} (${cNums.sort().join(', ')})`);
+            }
+            tooltipText = `Catequista de: ${pParts.join(', ')}`;
+        }
+        const catequistaAsterisk = isCatequista 
+            ? `<span style="color:#28a745; font-weight:bold; cursor:help; font-size:1.15rem; margin-left:4px;" title="${tooltipText}">*</span>`
+            : "";
+
         tr.innerHTML = `
             <td>
-                <div><strong>${nombreCompl}</strong> ${activoBadge}</div>
+                <div><strong>${nombreCompl}</strong>${catequistaAsterisk} ${activoBadge}</div>
             </td>
             <td>${pNombre}</td>
             <td>${cNombre}</td>
@@ -846,6 +888,22 @@ btnSave.addEventListener("click", async () => {
             showAlert("✅ Hermano registrado.", "success");
         }
 
+        // Sincronizar cambios de comunidad al usuario autenticado (si ya se ha logueado)
+        if (data.correo) {
+            try {
+                const uDocRef = doc(db, "autenticados", data.correo.toLowerCase());
+                const uSnap = await getDoc(uDocRef);
+                if (uSnap.exists()) {
+                    await updateDoc(uDocRef, {
+                        comunidadId: data.comunidadId,
+                        parroquiaId: data.parroquiaId
+                    });
+                }
+            } catch (e) {
+                console.error("Error syncing community to user profile:", e);
+            }
+        }
+
         // --- ACTUALIZACIONES BIDIRECCIONALES DE PAREJA ---
         const miNombreCompleto = `${data.primerNombre} ${data.primerApellido}`;
 
@@ -891,16 +949,21 @@ btnSave.addEventListener("click", async () => {
     }
 });
 
-// ── Eliminar (Soft delete definitiva) ──────────────
+// ── Eliminar (Borrado definitivo) ──────────────────
 btnDelete.addEventListener("click", async () => {
     if (!editingId) return;
-    if (!confirm("¿Seguro que deseas marcar como Inactivo a este hermano/a?")) return;
+    const confirmDelete = await window.customConfirm(
+        "Eliminar Hermano",
+        "¿Seguro que deseas ELIMINAR permanentemente a este hermano/a de la base de datos? Esta acción no se puede deshacer.",
+        { icon: "🗑️", danger: true }
+    );
+    if (!confirmDelete) return;
     
     try {
-        await updateDoc(doc(db, "hermanos", editingId), { activo: false });
+        await deleteDoc(doc(db, "hermanos", editingId));
         formPanel.style.display = "none";
         listPanel.style.display = "block";
-        showAlert("🗑️ Hermano desactivado.", "success");
+        showAlert("🗑️ Hermano eliminado permanentemente.", "success");
         await loadHermanos();
     } catch (err) {
         showAlert("Error: " + err.message, "error");
@@ -969,4 +1032,81 @@ function getWhatsAppLink(phone) {
         return `https://wa.me/1${cleaned}`;
     }
     return `https://wa.me/${cleaned}`;
+}
+
+let filterHistory = []; // { type: 'parroquia'|'comunidad', name: string }
+
+function renderActiveFilterChips() {
+    const bar = document.getElementById("active-filters-chips-bar");
+    if (!bar) return;
+
+    if (currentUserRole !== "admin") {
+        bar.style.display = "none";
+        return;
+    }
+
+    // Sync active filters to history (bubbling recently activated filters to the front)
+    activeFilters.parroquia.forEach(p => {
+        filterHistory = filterHistory.filter(h => !(h.type === 'parroquia' && h.name === p));
+        filterHistory.unshift({ type: 'parroquia', name: p });
+    });
+    activeFilters.comunidad.forEach(c => {
+        filterHistory = filterHistory.filter(h => !(h.type === 'comunidad' && h.name === c));
+        filterHistory.unshift({ type: 'comunidad', name: c });
+    });
+
+    // Limit to exactly the last 4 interacted items
+    if (filterHistory.length > 4) {
+        filterHistory = filterHistory.slice(0, 4);
+    }
+
+    if (filterHistory.length === 0) {
+        bar.style.display = "none";
+        return;
+    }
+
+    bar.innerHTML = "";
+    bar.style.display = "flex";
+
+    filterHistory.forEach(item => {
+        const isParroquia = item.type === 'parroquia';
+        const isActive = isParroquia 
+            ? activeFilters.parroquia.includes(item.name)
+            : activeFilters.comunidad.includes(item.name);
+
+        const chip = document.createElement("span");
+        
+        if (isActive) {
+            if (isParroquia) {
+                chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:600; color:#475569; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px;";
+            } else {
+                chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:600; color:#dc3545; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px;";
+            }
+            chip.innerHTML = `${item.name} <span style="color:#ef4444; font-weight:bold; font-size:0.75rem; margin-left:2px;">&times;</span>`;
+            chip.title = "Remover filtro";
+        } else {
+            chip.style.cssText = "background:transparent; border:none; padding:0; border-radius:0; cursor:pointer; font-weight:500; color:#94a3b8; display:inline-flex; align-items:center; gap:4px; font-size:0.85rem; margin-right:16px; opacity:0.75;";
+            chip.innerHTML = `${item.name}`;
+            chip.title = "Re-aplicar este filtro";
+        }
+
+        chip.addEventListener("click", () => {
+            if (isActive) {
+                if (isParroquia) {
+                    activeFilters.parroquia = activeFilters.parroquia.filter(val => val !== item.name);
+                } else {
+                    activeFilters.comunidad = activeFilters.comunidad.filter(val => val !== item.name);
+                }
+            } else {
+                if (isParroquia) {
+                    activeFilters.parroquia.push(item.name);
+                } else {
+                    activeFilters.comunidad.push(item.name);
+                }
+            }
+            renderActiveFilterChips();
+            renderTable(todosHermanos);
+        });
+        bar.appendChild(chip);
+    });
 }

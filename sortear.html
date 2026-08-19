@@ -1,20 +1,21 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon"       href="src/img/ico.ico" type="image/x-icon">
+    <link rel="stylesheet" href="src/css/hermanos.css">
     <link rel="stylesheet" href="src/css/login.css">
     <link rel="stylesheet" href="src/css/app.css">
-    <title>Módulos — Comunidad</title>
+    <title>Sorteo de Grupos — Comunidad</title>
 </head>
 <body>
 
-<!-- ══ LOGIN OVERLAY ══ -->
+<!-- ══ LOGIN OVERLAY ══════════════════════════════════════════════ -->
 <div id="login-overlay" class="login-overlay">
     <div class="login-card">
         <div class="login-logo">⛪</div>
-        <h2>Comunidad 4</h2>
+        <h2>Santa Iglesia Católica</h2>
         <p class="subtitle">Inicia sesión para continuar</p>
         <button id="btn-google" class="btn-google">
             <svg class="google-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -30,69 +31,49 @@
     </div>
 </div>
 
-<!-- ══ APP CONTENT ══ -->
+<!-- ══ APP CONTENT ════════════════════════════════════════════════ -->
 <div id="app-content" style="display:none;">
 
+    <!-- Nav -->
     <nav class="nav-bar">
-        <span class="nav-logo">⛪ Comunidad</span>
-        <a href="index.html"     class="nav-link"><span class="nav-icon">🎲</span> Sorteo</a>
+        <span class="nav-logo">⛪ Santa Iglesia Católica</span>
+        <a href="index.html"     class="nav-link"><span class="nav-icon">🧩</span> Módulos</a>
+        <a href="sortear.html"   class="nav-link"><span class="nav-icon">🎲</span> Sorteo</a>
         <a href="hermanos.html"  class="nav-link"><span class="nav-icon">👥</span> Hermanos</a>
         <a href="comunidad.html" class="nav-link"><span class="nav-icon">🏠</span> Comunidad</a>
+        <a href="catequista.html" class="nav-link"><span class="nav-icon">📖</span> Catequistas</a>
+        <a href="itinerario.html" class="nav-link"><span class="nav-icon">🗺️</span> Itinerario</a>
         <a href="parroquia.html" class="nav-link"><span class="nav-icon">⛪</span> Parroquia</a>
         <a href="realidad.html"  class="nav-link"><span class="nav-icon">📚</span> Realidad</a>
-        <a href="modulos.html"   class="nav-link"><span class="nav-icon">🧩</span> Módulos</a>
+        <a href="codComunidad.html" class="nav-link"><span class="nav-icon">🔑</span> Códigos</a>
+        <a href="permisos.html"  class="nav-link"><span class="nav-icon">🛡️</span> Permisos</a>
     </nav>
 
+    <!-- Top bar -->
     <div id="top-bar" class="top-bar" style="display:none;">
         <img id="user-photo" class="user-photo" src="" alt="" style="display:none;">
         <span class="user-info" id="user-info"></span>
         <button id="btn-ajustes" class="btn-outline" style="margin-right:8px; padding:6px 12px; font-size:0.85rem; border-radius:5px; cursor:pointer; background:white; color:var(--text); border:1px solid #ccc; font-family:sans-serif;">⚙️ Ajustes</button><button id="btn-logout" class="btn-logout">Cerrar sesión</button>
     </div>
-    <div class="page-content">
-        <h2 class="page-title">🧩 Módulos del Sistema</h2>
-        
-        <div id="global-alert" class="alert"></div>
 
-        <div class="ajustes-grid">
-            <a href="index.html" style="text-decoration:none;">
-                <div class="ajuste-card">
-                    <div class="ajuste-icon">🎲</div>
-                    <div class="ajuste-name">Sorteo</div>
-                    <div class="ajuste-desc">Módulo de distribución aleatoria de carismas.</div>
-                </div>
-            </a>
-            <a href="hermanos.html" style="text-decoration:none;">
-                <div class="ajuste-card">
-                    <div class="ajuste-icon">👥</div>
-                    <div class="ajuste-name">Hermanos</div>
-                    <div class="ajuste-desc">Directorio, perfiles y datos individuales.</div>
-                </div>
-            </a>
-            <a href="comunidad.html" style="text-decoration:none;">
-                <div class="ajuste-card">
-                    <div class="ajuste-icon">🏠</div>
-                    <div class="ajuste-name">Comunidad</div>
-                    <div class="ajuste-desc">Gestión de comunidades y asignación de responsabilidades.</div>
-                </div>
-            </a>
-            <a href="parroquia.html" style="text-decoration:none;">
-                <div class="ajuste-card">
-                    <div class="ajuste-icon">⛪</div>
-                    <div class="ajuste-name">Parroquia</div>
-                    <div class="ajuste-desc">Catálogos de parroquias y administración territorial.</div>
-                </div>
-            </a>
-            <a href="realidad.html" style="text-decoration:none;">
-                <div class="ajuste-card">
-                    <div class="ajuste-icon">📚</div>
-                    <div class="ajuste-name">Realidad</div>
-                    <div class="ajuste-desc">Historia, iniciadores e itinerarios de formación.</div>
-                </div>
-            </a>
+    <!-- Sorteo original -->
+    <div class="container">
+        <h1>Comunidad 4</h1>
+        <div class="selector-section">
+            <h3>1. Seleccione de 2 a 10 Encargados</h3>
+            <p id="contador">Seleccionados: 0</p>
+            <div id="lista-check" class="grid-personas">Cargando nombres...</div>
         </div>
+        <button id="btnSortear" class="btn-sortear" disabled>Sortear</button>
+        <div id="resultados"></div>
     </div>
+
 </div>
 
 <script type="module" src="src/js/auth.js"></script>
+<script src="src/js/hermanos.js"></script>
 </body>
 </html>
+
+
+
