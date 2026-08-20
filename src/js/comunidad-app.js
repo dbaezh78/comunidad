@@ -1345,6 +1345,6 @@ function formatComunidadName(name) {
 
 window.addEventListener("resize", () => {
     if (todasComunidades && todasComunidades.length > 0) {
-        renderTable(todasComunidades);
+        renderComunidadesTable(todasComunidades);
     }
 });
