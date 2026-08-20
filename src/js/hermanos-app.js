@@ -63,6 +63,8 @@ let editingId            = null;
 let originalSpouseId     = null;
 let currentHijosList     = []; // Lista temporal de hijos para edicion [{nombre, cumple}]
 let currentUserRole      = "hermano";
+let currentUserComunidadId = null;
+window.currentPrintedHermanos = [];
 
 window.addEventListener("app:ready", async (e) => {
     const user = e.detail;
@@ -70,6 +72,7 @@ window.addEventListener("app:ready", async (e) => {
         const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
         if (uSnap.exists()) {
             currentUserRole = uSnap.data().rol || "hermano";
+            currentUserComunidadId = uSnap.data().comunidadId || null;
         }
     } catch(err) { console.error(err); }
 
@@ -84,11 +87,25 @@ window.addEventListener("app:ready", async (e) => {
     setupSortingListeners();
     setupColumnRightClickFilters();
     makeTableResizable(document.getElementById("hermanos-table"));
+
     
     // Recargar conyuges si cambia comunidad o sexo
     hComunidad.addEventListener("change", reloadConyugesDropdown);
     hSexo.addEventListener("change", reloadConyugesDropdown);
+
+    hTelefono.addEventListener("input", (e) => {
+        e.target.value = formatPhoneString(e.target.value);
+    });
 });
+
+function formatPhoneString(phone) {
+    if (!phone) return "";
+    const clean = phone.replace(/\D/g, "");
+    if (clean.length === 10) {
+        return `(${clean.slice(0, 3)}) ${clean.slice(3, 6)}-${clean.slice(6)}`;
+    }
+    return phone;
+}
 
 async function cacheAllComunidades() {
     try {
@@ -513,6 +530,7 @@ function renderTable(lista) {
         }
     });
 
+    window.currentPrintedHermanos = filteredList;
     emptyState.style.display = "none";
     tableCard.style.display = "block";
     tbody.innerHTML = "";
@@ -520,7 +538,7 @@ function renderTable(lista) {
     filteredList.forEach(h => {
         const nombreCompl = `${h.primerNombre} ${h.segundoNombre||""} ${h.primerApellido} ${h.segundoApellido||""}`.replace(/\s+/g, ' ').trim();
         const pNombre = cachedParroquias[h.parroquiaId] || "—";
-        const cNombre = cachedComunidades[h.comunidadId] || "—";
+        const cNombre = formatComunidadName(cachedComunidades[h.comunidadId] || "—");
         const tr = document.createElement("tr");
         
         const locIcon = h.location?.lat 
@@ -540,10 +558,15 @@ function renderTable(lista) {
         // Tag de razon / responsable
         let razonBadge = `<span class="badge-rol badge-hno">${h.razon || "Hermano"}</span>`;
         if (h.razon === "Comunidad Celeste") {
-            razonBadge = `<span class="badge-rol" style="background:#7f8c8d; color:white;">👼 Celeste</span>`;
+            razonBadge = `<span class="badge-rol" style="background: gold; color: white; font-weight: bold;">👼 Celeste</span>`;
         } else if (h.razon === "Responsable") {
-            const numText = h.posicionResponsable ? ` (${h.posicionResponsable}°)` : "";
-            razonBadge = `<span class="badge-rol badge-1ro">Responsable${numText}</span>`;
+            let label = "Responsable";
+            let suffix = h.posicionResponsable ? ` (${h.posicionResponsable}°)` : "";
+            if (window.innerWidth < 992) {
+                label = "RESP.";
+                suffix = h.posicionResponsable ? ` ${h.posicionResponsable}°` : "";
+            }
+            razonBadge = `<span class="badge-rol badge-1ro">${label}${suffix}</span>`;
         }
 
         // Badge de activo / inactivo
@@ -572,7 +595,7 @@ function renderTable(lista) {
             </td>
             <td>${pNombre}</td>
             <td>${cNombre}</td>
-            <td>${h.telefono ? `<a href="${getWhatsAppLink(h.telefono)}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;" title="Abrir chat de WhatsApp">📲 ${h.telefono}</a>` : "—"}</td>
+            <td>${h.telefono ? `<a href="${getWhatsAppLink(h.telefono)}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;" title="Abrir chat de WhatsApp">${formatPhoneString(h.telefono)}</a>` : "—"}</td>
             <td style="text-align:center;">${razonBadge}</td>
             <td style="text-align:center;">${locIcon}</td>
             <td style="text-align:center;">
@@ -581,14 +604,30 @@ function renderTable(lista) {
             </td>
         `;
         
+        const cellNombre = tr.querySelector("td:first-child");
+        if (cellNombre) {
+            cellNombre.style.cursor = "pointer";
+            cellNombre.addEventListener("click", (e) => {
+                if (e.target.tagName !== "A" && e.target.tagName !== "BUTTON") {
+                    openViewForm(h);
+                }
+            });
+        }
+
         const btnView = tr.querySelector(".btn-view");
         if (btnView) {
-            btnView.addEventListener("click", () => openViewForm(h));
+            btnView.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openViewForm(h);
+            });
         }
 
         const btnEdit = tr.querySelector(".btn-edit");
         if (btnEdit) {
-            btnEdit.addEventListener("click", () => openEditForm(h));
+            btnEdit.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openEditForm(h);
+            });
         }
         tbody.appendChild(tr);
     });
@@ -1182,3 +1221,17 @@ function enforcePermissions() {
         hActivo.disabled = true;
     }
 }
+
+function formatComunidadName(name) {
+    if (!name) return "—";
+    if (window.innerWidth < 992) {
+        return name.replace(/Comunidad\s+/gi, "COM ");
+    }
+    return name;
+}
+
+window.addEventListener("resize", () => {
+    if (todosHermanos && todosHermanos.length > 0) {
+        renderTable(todosHermanos);
+    }
+});

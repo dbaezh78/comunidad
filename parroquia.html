@@ -85,12 +85,13 @@
                             <th id="th-nombre" style="cursor:pointer; user-select:none;">Nombre de la Parroquia ↕️</th>
                             <th id="th-parroco" style="cursor:pointer; user-select:none;">Párroco ↕️</th>
                             <th id="th-telefono" style="cursor:pointer; user-select:none;">Teléfono ↕️</th>
+                            <th id="th-pais" style="cursor:pointer; user-select:none;">País ↕️</th>
                             <th id="th-direccion" style="cursor:pointer; user-select:none;">Dirección ↕️</th>
                             <th style="text-align:center; width:120px;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="parroquia-tbody">
-                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando parroquias...</td></tr>
+                        <tr><td colspan="6" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando parroquias...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -127,6 +128,10 @@
                     <div class="form-group">
                         <label for="p-telefono">Teléfono</label>
                         <input type="tel" id="p-telefono" placeholder="809-000-0000">
+                    </div>
+                    <div class="form-group">
+                        <label for="p-pais">País</label>
+                        <input type="text" id="p-pais" placeholder="Ej: República Dominicana">
                     </div>
                     <div class="form-group full-width">
                         <label>Ubicación (Google Maps)</label>
@@ -204,6 +209,7 @@
                     <div class="profile-field"><div class="label">Nombre</div><div class="value" id="pv-nombre-txt">—</div></div>
                     <div class="profile-field"><div class="label">Dirección</div><div class="value" id="pv-dir">—</div></div>
                     <div class="profile-field"><div class="label">Teléfono</div><div class="value" id="pv-tel">—</div></div>
+                    <div class="profile-field"><div class="label">País</div><div class="value" id="pv-pais">—</div></div>
                     <div class="profile-field"><div class="label">Ubicación</div><div class="value" id="pv-loc">—</div></div>
                 </div>
             </div>

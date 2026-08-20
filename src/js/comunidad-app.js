@@ -54,7 +54,7 @@ let currentComunidadData = null;
 let allHermanos          = [];        // hermanos del sistema para busqueda
 let responsablesAsignados = {};       // { 1: {hermanoId, parejaId, esCasado}, ... }
 let cachedParroquias     = {};        // parroquiaId -> nombre
-let todasComunidades     = [];        // all communities in system
+window.todasComunidades     = [];        // all communities in system
 let isCreatingNew        = false;
 let loggedInUserComunidadId = null;
 let loggedInUserParroquiaId = null;
@@ -668,7 +668,7 @@ async function loadHermanos() {
         tr.innerHTML = `
             <td><strong>${nombreCompl}</strong></td>
             <td>${cumple}</td>
-            <td>${h.telefono || "—"}</td>
+            <td>${h.telefono ? formatPhoneString(h.telefono) : "—"}</td>
             <td style="text-align:center;">${mapsIcon}</td>
             <td style="text-align:center;"><span class="badge-rol ${badgeClass}">${rolTexto}</span></td>
         `;
@@ -676,6 +676,15 @@ async function loadHermanos() {
     });
 
     hermanosTable.style.display = "table";
+}
+
+function formatPhoneString(phone) {
+    if (!phone) return "";
+    const clean = phone.replace(/\D/g, "");
+    if (clean.length === 10) {
+        return `(${clean.slice(0, 3)}) ${clean.slice(3, 6)}-${clean.slice(6)}`;
+    }
+    return phone;
 }
 
 async function loadAllHermanos() {
@@ -764,20 +773,15 @@ async function loadCommunityCode(comunidadId) {
             }
         });
         
-        if (latestCodeDoc) {
+        if (latestCodeDoc && !latestCodeDoc.usadoPorEmail) {
             codeInput.value = latestCodeDoc.id;
-            if (latestCodeDoc.usadoPorEmail) {
-                codeInput.style.background = "#ffebee";
-                codeInput.title = `Usado por: ${latestCodeDoc.usadoPorEmail}`;
-            } else {
-                codeInput.style.background = "#e8f5e9";
-                codeInput.title = "Código activo y listo para usar";
-            }
+            codeInput.style.background = "#e8f5e9";
+            codeInput.title = "Código activo y listo para usar";
         } else {
             codeInput.value = "";
-            codeInput.placeholder = "Sin código generado";
-            codeInput.style.background = "#f5f5f5";
-            codeInput.title = "";
+            codeInput.placeholder = latestCodeDoc?.usadoPorEmail ? "Código usado (Generar nuevo)" : "Sin código generado";
+            codeInput.style.background = "#ffebee";
+            codeInput.title = latestCodeDoc?.usadoPorEmail ? `El último código fue usado por: ${latestCodeDoc.usadoPorEmail}` : "";
         }
     } catch(e) {
         console.error("Error loading code:", e);
@@ -871,7 +875,7 @@ function renderComunidadesTable(lista, isFilteredCall = false) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td><strong class="click-filter" data-col="parroquiaNombre" style="cursor:pointer; color:var(--primary);">${c.parroquiaNombre}</strong></td>
-            <td><span class="click-filter" data-col="numero" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">Comunidad ${c.numero}</span></td>
+            <td><span class="click-filter" data-col="numero" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${formatComunidadName(`Comunidad ${c.numero}`)}</span></td>
             <td><span class="click-filter" data-col="etapaNombre" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted; font-weight:600; color:#475569;">${c.etapaNombre || "—"}</span></td>
             <td><span class="click-filter" data-col="catequistaNombre" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${c.catequistaNombre || "—"}</span></td>
             <td style="text-align:center;">
@@ -885,7 +889,7 @@ function renderComunidadesTable(lista, isFilteredCall = false) {
             el.addEventListener("click", () => {
                 const col = el.dataset.col;
                 let val = el.textContent.trim();
-                if (col === "numero") val = val.replace("Comunidad ", "");
+                if (col === "numero") val = val.replace(/Comunidad\s+|COM\s+/gi, "");
                 if (val && val !== "—") {
                     if (!activeFilters[col].includes(val)) {
                         activeFilters[col].push(val);
@@ -1006,6 +1010,7 @@ function filterComunidades() {
         return 0;
     });
 
+    window.currentPrintedComunidades = filtered;
     renderComunidadesTable(filtered, true);
 }
 
@@ -1329,3 +1334,17 @@ function enforcePermissions() {
         btnGenerateCode.style.display = window.hasPermission("comunidad_codigo") ? "inline-block" : "none";
     }
 }
+
+function formatComunidadName(name) {
+    if (!name) return "—";
+    if (window.innerWidth < 992) {
+        return name.replace(/Comunidad\s+/gi, "COM ");
+    }
+    return name;
+}
+
+window.addEventListener("resize", () => {
+    if (todasComunidades && todasComunidades.length > 0) {
+        renderTable(todasComunidades);
+    }
+});

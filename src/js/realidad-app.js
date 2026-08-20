@@ -31,7 +31,7 @@ const btnDelete       = document.getElementById("btn-delete-realidad");
 
 // Estado
 let todosHermanos    = [];
-let todasRealidades  = [];
+window.todasRealidades  = [];
 let editingId        = null;
 
 // ── App ready ────────────────────────────────────

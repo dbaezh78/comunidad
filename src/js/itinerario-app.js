@@ -18,7 +18,7 @@ const filterRealidad  = document.getElementById("filter-realidad");
 const pageTitleHeader = document.getElementById("itinerario-titulo");
 
 // State
-let allStages = [];
+window.allStages = [];
 let todasRealidades = [];
 let defaultRealidadId = "";
 let editingId = null;
@@ -266,6 +266,7 @@ function filterStages() {
         return 0;
     });
 
+    window.currentPrintedStages = filtered;
     renderTable(filtered, true);
 }
 

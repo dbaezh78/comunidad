@@ -1,5 +1,5 @@
-﻿let todasLasPersonas = [];
-let seleccionados = [];
+window.todasLasPersonas = [];
+window.seleccionados = [];
 
 // 1. Cargar datos del JSON
 async function cargarNombres() {

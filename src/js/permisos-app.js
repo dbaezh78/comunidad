@@ -98,8 +98,20 @@ window.addEventListener("app:ready", async (e) => {
 
     // Bind Permisos actions
     selectPermisosGrupo.addEventListener("change", loadGroupPermissions);
-    chkAdminTotal.addEventListener("change", toggleAdminTotal);
+    chkAdminTotal.addEventListener("change", () => {
+        toggleAdminTotal();
+        queueAutoSave();
+    });
     btnSavePermisos.addEventListener("click", savePermissions);
+
+    const treeContainer = document.getElementById("permisos-tree");
+    if (treeContainer) {
+        treeContainer.addEventListener("change", (e) => {
+            if (e.target.classList.contains("tree-checkbox")) {
+                queueAutoSave();
+            }
+        });
+    }
 
     // Render permissions tree structure
     renderPermissionsTreeMarkup();
@@ -622,6 +634,32 @@ const PERMISSIONS_TREE = [
     children: [
       { id: "ajuste_ver", label: "Ver Ajuste" }
     ]
+  },
+  {
+    id: "impresion",
+    label: "Impresión",
+    children: [
+      { id: "impresion_seleccion_usuario", label: "Selección de Impresión Usuario" },
+      { id: "impresion_activo", label: "Activo" },
+      { id: "impresion_parroquia", label: "Parroquia" },
+      { id: "impresion_comunidad", label: "Comunidad" },
+      { id: "impresion_sexo", label: "Sexo" },
+      { id: "impresion_nombre_completo", label: "Nombre y apellido" },
+      { id: "impresion_fecha_nac", label: "fecha nacimiento" },
+      { id: "impresion_pareja", label: "pareja" },
+      { id: "impresion_carisma", label: "carisma" },
+      { id: "impresion_razon", label: "Razon" },
+      { id: "impresion_estado_civil", label: "Estado Civil" },
+      { id: "impresion_nombre1", label: "Primer Nombre" },
+      { id: "impresion_nombre2", label: "Segundo Nombre" },
+      { id: "impresion_apellido1", label: "Primer Apellido" },
+      { id: "impresion_apellido2", label: "segundo Apellido" },
+      { id: "impresion_correo", label: "Correo" },
+      { id: "impresion_telefono", label: "Telefono" },
+      { id: "impresion_direccion", label: "Direccion" },
+      { id: "impresion_hijos_cant", label: "Cantidad de hijos" },
+      { id: "impresion_hijos_nombres", label: "Nombres hijos" }
+    ]
   }
 ];
 
@@ -631,8 +669,12 @@ function renderPermissionsTreeMarkup() {
     buildTreeNodes(PERMISSIONS_TREE, permisosTree);
 }
 
-function buildTreeNodes(nodes, parentEl) {
+function buildTreeNodes(nodes, parentEl, isChildOfImpresion = false) {
+    const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin";
     nodes.forEach(node => {
+        if (isNotAdmin && node.id !== "impresion" && !isChildOfImpresion) {
+            return;
+        }
         const hasChildren = node.children && node.children.length > 0;
         
         const nodeEl = document.createElement("div");
@@ -685,6 +727,10 @@ function buildTreeNodes(nodes, parentEl) {
         checkbox.className = "tree-checkbox";
         checkbox.dataset.id = node.id;
         
+        if (isNotAdmin && node.id === "impresion_seleccion_usuario") {
+            checkbox.disabled = true;
+        }
+        
         if (hasChildren) {
             checkbox.addEventListener("change", () => {
                 const subCheckboxes = nodeEl.querySelectorAll(".tree-checkbox");
@@ -692,6 +738,7 @@ function buildTreeNodes(nodes, parentEl) {
                     cb.checked = checkbox.checked;
                     cb.indeterminate = false;
                 });
+                queueAutoSave();
             });
         }
         
@@ -706,7 +753,7 @@ function buildTreeNodes(nodes, parentEl) {
             childrenEl.className = "tree-node-children";
             childrenEl.style.display = isExpanded ? "block" : "none";
             
-            buildTreeNodes(node.children, childrenEl);
+            buildTreeNodes(node.children, childrenEl, isChildOfImpresion || node.id === "impresion");
             nodeEl.appendChild(childrenEl);
             
             // Listen for child updates to sync parent checked state
@@ -801,6 +848,35 @@ function toggleAdminTotal() {
             cb.disabled = false;
         }
     });
+}
+
+let saveTimeout = null;
+function queueAutoSave() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+        const selectedGroup = selectPermisosGrupo.value;
+        if (!selectedGroup) return;
+        try {
+            const permissions = {};
+            const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+            checkboxes.forEach(cb => {
+                const id = cb.dataset.id;
+                // Only collect checkboxes that are actually rendered in the DOM
+                permissions[id] = cb.checked;
+            });
+
+            const data = {
+                adminTotal: chkAdminTotal.checked,
+                permissions,
+                updatedAt: new Date().toISOString()
+            };
+
+            await setDoc(doc(db, "permisosRoles", selectedGroup), data, { merge: true });
+            showAlert("💾 Permisos guardados automáticamente.", "success");
+        } catch(err) {
+            console.error("Error auto-saving permissions:", err);
+        }
+    }, 3000);
 }
 
 async function savePermissions() {
@@ -915,43 +991,108 @@ function filterUsoLogs() {
 function enforcePermissions() {
     if (!window.hasPermission) return;
 
+    // Main Tab: Cuenta
+    const tabCuenta = document.getElementById("tab-btn-cuenta");
+    if (tabCuenta) {
+        if (!window.hasPermission("permisos_cuenta")) {
+            tabCuenta.style.display = "none";
+        } else {
+            tabCuenta.style.display = "";
+        }
+    }
+
+    // Main Tab: Acceso (Visible if has permisos_acceso OR impresion_seleccion_usuario)
+    const tabAcceso = document.getElementById("tab-btn-acceso");
+    const hasAccesoMainPerm = window.hasPermission("permisos_acceso") || window.hasPermission("impresion_seleccion_usuario");
+    if (tabAcceso) {
+        if (!hasAccesoMainPerm) {
+            tabAcceso.style.display = "none";
+        } else {
+            tabAcceso.style.display = "";
+        }
+    }
+
     // Main Tab: Uso App
-    const tabUso = document.getElementById("tab-usoapp");
-    if (tabUso && !window.hasPermission("permisos_uso_app")) {
-        tabUso.style.display = "none";
+    const tabUso = document.getElementById("tab-btn-usoapp");
+    if (tabUso) {
+        if (!window.hasPermission("permisos_uso_app")) {
+            tabUso.style.display = "none";
+        } else {
+            tabUso.style.display = "";
+        }
     }
 
     // Sub Tabs under Acceso
-    const tabMiembros = document.getElementById("subtab-miembros");
+    const tabMiembros = document.getElementById("subtab-btn-miembros");
     const hasMiembrosPerm = window.hasPermission("permisos_acceso_miembros_editar_rol") ||
                             window.hasPermission("permisos_acceso_miembros_editar_suspender") ||
                             window.hasPermission("permisos_acceso_miembros_eliminar");
-    if (tabMiembros && !hasMiembrosPerm) {
-        tabMiembros.style.display = "none";
+    if (tabMiembros) {
+        if (!hasMiembrosPerm) {
+            tabMiembros.style.display = "none";
+        } else {
+            tabMiembros.style.display = "";
+        }
     }
 
-    const tabGrupos = document.getElementById("subtab-grupos");
+    const tabGrupos = document.getElementById("subtab-btn-grupos");
     const hasGruposPerm = window.hasPermission("permisos_acceso_grupos_ver") ||
                           window.hasPermission("permisos_acceso_grupos_crear") ||
                           window.hasPermission("permisos_acceso_grupos_editar") ||
                           window.hasPermission("permisos_acceso_grupos_eliminar");
-    if (tabGrupos && !hasGruposPerm) {
-        tabGrupos.style.display = "none";
+    if (tabGrupos) {
+        if (!hasGruposPerm) {
+            tabGrupos.style.display = "none";
+        } else {
+            tabGrupos.style.display = "";
+        }
     }
 
-    const tabPermisos = document.getElementById("subtab-permisos");
-    const hasPermisosPerm = window.hasPermission("permisos_acceso_permisos_ver");
-    if (tabPermisos && !hasPermisosPerm) {
-        tabPermisos.style.display = "none";
+    const tabPermisos = document.getElementById("subtab-btn-permisos");
+    const hasPermisosPerm = window.hasPermission("permisos_acceso_permisos_ver") || window.hasPermission("impresion_seleccion_usuario");
+    if (tabPermisos) {
+        if (!hasPermisosPerm) {
+            tabPermisos.style.display = "none";
+        } else {
+            tabPermisos.style.display = "";
+        }
+    }
+
+    // Auto-switch main tab if currently active is hidden
+    const mainTabsList = [
+        { btn: tabCuenta, pane: paneCuenta, perm: "permisos_cuenta" },
+        { btn: tabAcceso, pane: paneAcceso, allowed: hasAccesoMainPerm },
+        { btn: tabUso, pane: paneUsoApp, perm: "permisos_uso_app" }
+    ];
+    const activeMainTab = mainTabsList.find(t => t.btn && t.btn.classList.contains("active"));
+    if (activeMainTab && (activeMainTab.perm ? !window.hasPermission(activeMainTab.perm) : !activeMainTab.allowed)) {
+        const allowedMain = mainTabsList.find(t => t.btn && (t.perm ? window.hasPermission(t.perm) : t.allowed));
+        if (allowedMain) {
+            allowedMain.btn.click();
+        }
+    }
+
+    // Auto-switch sub-tab if currently active is hidden
+    const subTabsList = [
+        { btn: tabMiembros, pane: subpaneMiembros, allowed: hasMiembrosPerm },
+        { btn: tabGrupos, pane: subpaneGrupos, allowed: hasGruposPerm },
+        { btn: tabPermisos, pane: subpanePermisos, allowed: hasPermisosPerm }
+    ];
+    const activeSubTab = subTabsList.find(t => t.btn && t.btn.classList.contains("active"));
+    if (activeSubTab && !activeSubTab.allowed) {
+        const allowedSub = subTabsList.find(t => t.btn && t.allowed);
+        if (allowedSub) {
+            allowedSub.btn.click();
+        }
     }
 
     // Member edit options
-    const selectUserRol = document.getElementById("user-rol");
+    const selectUserRol = document.getElementById("u-rol");
     if (selectUserRol && !window.hasPermission("permisos_acceso_miembros_editar_rol")) {
         selectUserRol.disabled = true;
     }
 
-    const checkUserBanned = document.getElementById("user-banned");
+    const checkUserBanned = document.getElementById("u-banned");
     if (checkUserBanned && !window.hasPermission("permisos_acceso_miembros_editar_suspender")) {
         checkUserBanned.disabled = true;
     }
@@ -963,7 +1104,23 @@ function enforcePermissions() {
     }
 
     const btnSavePermisos = document.getElementById("btn-save-permisos");
-    if (btnSavePermisos && !window.hasPermission("permisos_acceso_permisos_asignar")) {
+    const canSavePermisos = window.hasPermission("permisos_acceso_permisos_asignar") || window.hasPermission("impresion_seleccion_usuario");
+    if (btnSavePermisos && !canSavePermisos) {
         btnSavePermisos.style.display = "none";
+    }
+
+    const isNotAdmin = !window.userPermissions?.adminTotal && window.userPermissions?.rol !== "admin";
+    if (isNotAdmin && window.userPermissions?.rol) {
+        const selectGrupo = document.getElementById("select-grupo");
+        if (selectGrupo) {
+            selectGrupo.value = window.userPermissions.rol;
+            selectGrupo.disabled = true;
+            selectGrupo.dispatchEvent(new Event("change"));
+        }
+        const adminTotalCheck = document.getElementById("chk-admin-total");
+        if (adminTotalCheck) {
+            const parent = adminTotalCheck.closest("div");
+            if (parent) parent.style.display = "none";
+        }
     }
 }

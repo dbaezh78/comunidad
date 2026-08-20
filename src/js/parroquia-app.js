@@ -22,6 +22,7 @@ const btnDeleteParroquia   = document.getElementById("btn-delete-parroquia");
 const pNombre              = document.getElementById("p-nombre");
 const pDireccion           = document.getElementById("p-direccion");
 const pTelefono            = document.getElementById("p-telefono");
+const pPais                = document.getElementById("p-pais");
 const pLat                 = document.getElementById("p-lat");
 const pLng                 = document.getElementById("p-lng");
 const btnLocation          = document.getElementById("btn-location");
@@ -41,6 +42,7 @@ const pvNombre             = document.getElementById("pv-nombre");
 const pvNombreTxt          = document.getElementById("pv-nombre-txt");
 const pvDir                = document.getElementById("pv-dir");
 const pvTel                = document.getElementById("pv-tel");
+const pvPais               = document.getElementById("pv-pais");
 const pvLoc                = document.getElementById("pv-loc");
 const pvParroco            = document.getElementById("pv-parroco");
 const pvRealParroco        = document.getElementById("pv-realidad-parroco");
@@ -50,12 +52,12 @@ const pvRealidades         = document.getElementById("pv-realidades");
 
 // Estado
 let todasRealidades     = [];    // docs de Firestore
-let todasParroquias     = [];
+window.todasParroquias     = [];
 let editingParroquiaId  = null;
 
 let currentSortColumn   = "nombre";
 let currentSortDir      = "asc";
-let activeFilters       = { nombre: [], parroco: [], telefono: [], direccion: [] };
+let activeFilters       = { nombre: [], parroco: [], telefono: [], pais: [], direccion: [] };
 let filterHistory       = [];
 
 // ── App ready ────────────────────────────────────
@@ -173,6 +175,7 @@ function openEditForm(p) {
     pNombre.value              = p.nombre      || "";
     pDireccion.value           = p.direccion   || "";
     pTelefono.value            = p.telefono    || "";
+    pPais.value                = p.pais        || "";
     pParroco.value             = p.parroco     || "";
     pRealidadParroco.value     = p.realidadParrocoId  || "";
     pDiacono.value             = p.diacono     || "";
@@ -198,6 +201,7 @@ function clearForm() {
     pNombre.value          = "";
     pDireccion.value       = "";
     pTelefono.value        = "";
+    pPais.value            = "";
     pParroco.value         = "";
     pRealidadParroco.value = "";
     pDiacono.value         = "";
@@ -249,6 +253,7 @@ btnSave.addEventListener("click", async () => {
         nombre:               pNombre.value.trim(),
         direccion:            pDireccion.value.trim(),
         telefono:             pTelefono.value.trim(),
+        pais:                 pPais.value.trim(),
         location:             pLat.value ? { lat: parseFloat(pLat.value), lng: parseFloat(pLng.value) } : null,
         parroco:              pParroco.value.trim(),
         realidadParrocoId:    pRealidadParroco.value   || null,
@@ -306,6 +311,7 @@ function showViewPanel(p) {
     pvNombreTxt.textContent = p.nombre    || "—";
     pvDir.textContent       = p.direccion || "—";
     pvTel.textContent       = p.telefono  || "—";
+    pvPais.textContent      = p.pais      || "—";
     pvParroco.textContent   = p.parroco   || "—";
     pvDiacono.textContent   = p.diacono   || "—";
     pvRealParroco.textContent  = p.realidadParrocoNombre  || "—";
@@ -358,7 +364,7 @@ function renderParroquiasTable(lista, isFilteredCall = false) {
     tbody.innerHTML = "";
 
     if (lista.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#999;">No se encontraron parroquias.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:15px; color:#999;">No se encontraron parroquias.</td></tr>';
         return;
     }
 
@@ -368,6 +374,7 @@ function renderParroquiasTable(lista, isFilteredCall = false) {
             <td><strong class="click-filter" data-col="nombre" style="cursor:pointer; color:var(--primary);">${p.nombre}</strong></td>
             <td><span class="click-filter" data-col="parroco" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.parroco || "—"}</span></td>
             <td><span class="click-filter" data-col="telefono" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.telefono || "—"}</span></td>
+            <td><span class="click-filter" data-col="pais" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.pais || "—"}</span></td>
             <td><span class="click-filter" data-col="direccion" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${p.direccion || "—"}</span></td>
             <td style="text-align:center;">
                 ${window.hasPermission("parroquia_consultar") ? `<button class="btn btn-sm btn-outline btn-view-table" data-id="${p.id}" title="Consultar parroquia" style="margin-right:4px;">👁️</button>` : ""}
@@ -435,6 +442,9 @@ function filterParroquias() {
     if (activeFilters.telefono.length > 0) {
         filtered = filtered.filter(p => activeFilters.telefono.includes(p.telefono));
     }
+    if (activeFilters.pais && activeFilters.pais.length > 0) {
+        filtered = filtered.filter(p => activeFilters.pais.includes(p.pais));
+    }
     if (activeFilters.direccion.length > 0) {
         filtered = filtered.filter(p => activeFilters.direccion.includes(p.direccion));
     }
@@ -444,8 +454,9 @@ function filterParroquias() {
         filtered = filtered.filter(p => {
             const nom = (p.nombre || "").toLowerCase();
             const pr = (p.parroco || "").toLowerCase();
+            const ps = (p.pais || "").toLowerCase();
             const dir = (p.direccion || "").toLowerCase();
-            return nom.includes(q) || pr.includes(q) || dir.includes(q);
+            return nom.includes(q) || pr.includes(q) || ps.includes(q) || dir.includes(q);
         });
     }
 
@@ -462,11 +473,12 @@ function filterParroquias() {
         return 0;
     });
 
+    window.currentPrintedParroquias = filtered;
     renderParroquiasTable(filtered, true);
 }
 
 function setupSortingListeners() {
-    const headers = ["nombre", "parroco", "telefono", "direccion"];
+    const headers = ["nombre", "parroco", "telefono", "pais", "direccion"];
     headers.forEach(h => {
         const th = document.getElementById(`th-${h}`);
         if (th) {
@@ -620,7 +632,7 @@ let efCurrentColumn = "";
 let efCurrentValues = [];
 
 function setupColumnRightClickFilters() {
-    const cols = ["nombre", "parroco", "telefono", "direccion"];
+    const cols = ["nombre", "parroco", "telefono", "pais", "direccion"];
     
     cols.forEach(k => {
         const th = document.getElementById(`th-${k}`);
