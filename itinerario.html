@@ -68,9 +68,13 @@
                         <option value="">— Seleccionar Realidad —</option>
                     </select>
                 </div>
-                <div class="form-group" style="grid-column: span 2;">
+                <div class="form-group" style="grid-column: span 1;">
                     <label>Nombre de la Etapa *</label>
                     <input type="text" id="i-nombre" placeholder="Ej: Precatecumenado" required>
+                </div>
+                <div class="form-group" style="grid-column: span 1;">
+                    <label>Orden (Número de Paso) *</label>
+                    <input type="number" id="i-orden" placeholder="Ej: 1" required min="1">
                 </div>
                 <div class="form-group" style="grid-column: span 2;">
                     <label>Detalle / Descripción</label>
@@ -81,6 +85,42 @@
                     <input type="text" id="i-otros" placeholder="Datos adicionales...">
                 </div>
             </div>
+            
+            <!-- Temas y Artículos de la Etapa (Nested inside Form Card) -->
+            <div id="temas-etapa-card" style="display:none; margin-top:20px; border-top:1.5px solid #e2e8f0; padding-top:20px;">
+                <div style="font-weight:700; color:var(--primary); font-size:1.02rem; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                    <span id="temas-card-title">📚 Temas y Artículos: —</span>
+                </div>
+                
+                <div style="display:flex; gap:12px; margin-bottom:15px; flex-wrap:wrap; align-items:flex-end;">
+                    <div style="width:90px; display:flex; flex-direction:column;">
+                        <label style="font-weight:600; color:#475569; margin-bottom:6px; font-size:0.85rem;">Orden:</label>
+                        <input type="number" id="input-tema-orden" placeholder="Ej: 1" style="padding:8px; border-radius:4px; border:1px solid #ccc; font-size:0.88rem; height:38px; box-sizing:border-box;" min="1">
+                    </div>
+                    <div style="flex:1; min-width:260px; display:flex; flex-direction:column;">
+                        <label style="font-weight:600; color:#475569; margin-bottom:6px; font-size:0.85rem;">Agregar Nuevo Tema o Artículo para esta Etapa:</label>
+                        <input type="text" id="input-nuevo-tema" placeholder="Ej: Primer Tema de Formación" style="padding:8px; border-radius:4px; border:1px solid #ccc; font-size:0.88rem; height:38px; box-sizing:border-box;">
+                    </div>
+                    <button id="btn-agregar-tema" class="btn btn-primary" style="height:38px; padding:0 20px; font-weight:700;">➕ Agregar</button>
+                    <button id="btn-cancelar-tema" class="btn btn-outline" style="display:none; height:38px; padding:0 15px; font-weight:600;">Cancelar</button>
+                </div>
+
+                <div style="overflow-x:auto; max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; background:white;">
+                    <table class="hermanos-table" style="margin-bottom:0; font-family:'Segoe UI',sans-serif;">
+                        <thead>
+                            <tr style="background:#f8fafc; position:sticky; top:0; z-index:10;">
+                                <th style="padding:8px; font-size:0.82rem; color:#475569; width:60px; text-align:center;">#</th>
+                                <th style="padding:8px; font-size:0.82rem; color:#475569;">Tema / Artículo</th>
+                                <th style="padding:8px; font-size:0.82rem; color:#475569; text-align:center; width:120px;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="temas-etapa-tbody">
+                            <!-- Dinámico -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="btn-actions" style="margin-top:20px;">
                 <button id="btn-save-itinerario" class="btn btn-primary">💾 Guardar Etapa</button>
                 <button id="btn-cancel" class="btn btn-outline" style="display:none;">Cancelar Edición</button>
@@ -102,6 +142,7 @@
                 <table class="hermanos-table">
                     <thead>
                         <tr>
+                            <th id="th-orden" style="cursor:pointer; user-select:none; width:80px;">Paso # ↕️</th>
                             <th id="th-nombre" style="cursor:pointer; user-select:none;">Nombre de la Etapa ↕️</th>
                             <th id="th-detalle" style="cursor:pointer; user-select:none;">Detalle / Descripción ↕️</th>
                             <th id="th-otros" style="cursor:pointer; user-select:none;">Otros ↕️</th>
@@ -109,7 +150,7 @@
                         </tr>
                     </thead>
                     <tbody id="itinerario-tbody">
-                        <tr><td colspan="4" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando etapas del itinerario...</td></tr>
+                        <tr><td colspan="5" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando etapas del itinerario...</td></tr>
                     </tbody>
                 </table>
             </div>

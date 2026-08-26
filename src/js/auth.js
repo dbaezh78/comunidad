@@ -169,6 +169,7 @@ async function allowUserAccess(user) {
             "realidad.html": () => window.hasPermission("realidad_ver") || window.hasPermission("realidad_consultar"),
             "itinerario.html": () => window.hasPermission("itinerario_ver"),
             "sortear.html": () => window.hasPermission("sortear_ver"),
+            "gsorteo.html": () => window.hasPermission("sortear_ver"),
             "codComunidad.html": () => window.hasPermission("codigo_ver"),
             "permisos.html": () => window.hasPermission("permisos_cuenta") || window.hasPermission("permisos_acceso") || window.hasPermission("impresion_seleccion_usuario")
         };
@@ -219,6 +220,7 @@ async function allowUserAccess(user) {
         }
         if (window.hasPermission("sortear_ver")) {
             html += `<a href="sortear.html" class="nav-link ${basePage === 'sortear.html' ? 'active' : ''}"><span class="nav-icon">🎲</span> Sortear</a>`;
+            html += `<a href="gsorteo.html" class="nav-link ${basePage === 'gsorteo.html' ? 'active' : ''}"><span class="nav-icon">📊</span> Sorteo Grupos</a>`;
         }
         if (window.hasPermission("codigo_ver")) {
             html += `<a href="codComunidad.html" class="nav-link ${basePage === 'codComunidad.html' ? 'active' : ''}"><span class="nav-icon">🔑</span> Códigos</a>`;

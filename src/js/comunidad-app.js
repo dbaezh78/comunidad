@@ -570,7 +570,12 @@ async function loadHermanos() {
 
     hermanosLoading.style.display = "none";
     const comHermanos = [];
-    snap.forEach(d => comHermanos.push({ id: d.id, ...d.data() }));
+    snap.forEach(d => {
+        const data = d.data();
+        if (data.razon !== "Comunidad Celeste") {
+            comHermanos.push({ id: d.id, ...data });
+        }
+    });
 
     if (comHermanos.length === 0) {
         hermanosEmpty.style.display = "block";

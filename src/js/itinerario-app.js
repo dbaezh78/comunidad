@@ -1,8 +1,10 @@
 import { db } from "./firebase.js";
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, updateDoc, query, orderBy, addDoc, where } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 
 // DOM
 const inputNombre     = document.getElementById("i-nombre");
+const inputOrden      = document.getElementById("i-orden");
+const inputTemaOrden  = document.getElementById("input-tema-orden");
 const inputDetalle    = document.getElementById("i-detalle");
 const inputOtros      = document.getElementById("i-otros");
 const btnSave         = document.getElementById("btn-save-itinerario");
@@ -23,10 +25,15 @@ let todasRealidades = [];
 let defaultRealidadId = "";
 let editingId = null;
 
-let currentSortColumn = "nombre";
+let currentSortColumn = "orden";
 let currentSortDir = "asc";
-let activeFilters = { nombre: [], detalle: [], otros: [] };
+let activeFilters = { orden: [], nombre: [], detalle: [], otros: [] };
 let filterHistory = [];
+
+// State variables for stage themes
+let selectedStageForThemes = null;
+let currentThemesList = [];
+let editingTemaId = null;
 
 // App Ready
 window.addEventListener("app:ready", async () => {
@@ -36,6 +43,10 @@ window.addEventListener("app:ready", async () => {
     searchInput.addEventListener("input", () => filterStages());
     filterRealidad.addEventListener("change", onFilterRealidadChange);
     setupSortingListeners();
+
+    // Themes card listeners
+    document.getElementById("btn-agregar-tema").addEventListener("click", addTemaForSelectedStage);
+    document.getElementById("btn-cancelar-tema").addEventListener("click", resetTemaForm);
 
     await loadRealidades();
     await loadStages();
@@ -108,13 +119,21 @@ function onFilterRealidadChange() {
 
 // ── CRUD OPERATIONS ────────────────────────────────
 async function loadStages() {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando...</td></tr>';
     try {
         const snap = await getDocs(query(collection(db, "itinerario"), orderBy("createdAt", "asc")));
         
         allStages = [];
         snap.forEach(d => {
             allStages.push({ id: d.id, ...d.data() });
+        });
+
+        // Sort in memory by orden (ascending), then by createdAt (ascending)
+        allStages.sort((a, b) => {
+            const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
+            const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;
+            if (ordA !== ordB) return ordA - ordB;
+            return (a.createdAt || "").localeCompare(b.createdAt || "");
         });
 
         // Seed default stages under Camino Neocatecumenal if completely empty
@@ -153,6 +172,7 @@ async function seedDefaultStages() {
         const docRef = doc(db, "itinerario", id);
         await setDoc(docRef, {
             nombre: name,
+            orden: i + 1,
             detalle: `Etapa del itinerario neocatecumenal: ${name}.`,
             otros: "",
             realidadId: defaultRealidadId,
@@ -171,13 +191,14 @@ function renderTable(lista, isFilteredCall = false) {
     tbody.innerHTML = "";
 
     if (lista.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px; color:#999;">No se encontraron etapas para esta realidad.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#999;">No se encontraron etapas para esta realidad.</td></tr>';
         return;
     }
 
     lista.forEach(s => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
+            <td style="font-weight:700; color:#334155; text-align:center;">${s.orden !== undefined && s.orden !== null ? s.orden : "—"}</td>
             <td><strong class="click-filter" data-col="nombre" style="cursor:pointer; color:var(--primary);">${s.nombre}</strong></td>
             <td><span class="click-filter" data-col="detalle" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.detalle || "—"}</span></td>
             <td><span class="click-filter" data-col="otros" style="cursor:pointer; text-decoration:none; text-decoration-style:dotted;">${s.otros || "—"}</span></td>
@@ -255,11 +276,17 @@ function filterStages() {
 
     // Apply sorting
     filtered.sort((a, b) => {
-        let valA = a[currentSortColumn] || "";
-        let valB = b[currentSortColumn] || "";
+        let valA = a[currentSortColumn];
+        let valB = b[currentSortColumn];
         
-        valA = String(valA).toLowerCase();
-        valB = String(valB).toLowerCase();
+        if (currentSortColumn === "orden") {
+            const numA = valA !== undefined && valA !== null ? parseInt(valA) : 999;
+            const numB = valB !== undefined && valB !== null ? parseInt(valB) : 999;
+            return currentSortDir === "asc" ? numA - numB : numB - numA;
+        }
+
+        valA = String(valA || "").toLowerCase();
+        valB = String(valB || "").toLowerCase();
 
         if (valA < valB) return currentSortDir === "asc" ? -1 : 1;
         if (valA > valB) return currentSortDir === "asc" ? 1 : -1;
@@ -271,7 +298,7 @@ function filterStages() {
 }
 
 function setupSortingListeners() {
-    const headers = ["nombre", "detalle", "otros"];
+    const headers = ["orden", "nombre", "detalle", "otros"];
     headers.forEach(h => {
         const th = document.getElementById(`th-${h}`);
         if (th) {
@@ -294,6 +321,7 @@ function handleSort(col) {
 
 function updateHeaderLabels() {
     const cols = {
+        "orden": "Paso #",
         "nombre": "Nombre de la Etapa",
         "detalle": "Detalle / Descripción",
         "otros": "Otros"
@@ -381,6 +409,7 @@ function renderActiveFilterChips() {
 
 async function saveStage() {
     const nombre = inputNombre.value.trim();
+    const orden = inputOrden.value.trim() ? parseInt(inputOrden.value.trim()) : null;
     const detalle = inputDetalle.value.trim();
     const otros = inputOtros.value.trim();
     const realidadId = selectRealidad.value;
@@ -396,6 +425,7 @@ async function saveStage() {
     try {
         const data = {
             nombre,
+            orden,
             detalle,
             otros,
             realidadId,
@@ -440,6 +470,7 @@ function editStage(s) {
     enableAllInputs();
     editingId = s.id;
     inputNombre.value = s.nombre;
+    inputOrden.value = s.orden !== undefined && s.orden !== null ? s.orden : "";
     inputDetalle.value = s.detalle || "";
     inputOtros.value = s.otros || "";
     selectRealidad.value = s.realidadId || defaultRealidadId;
@@ -447,6 +478,9 @@ function editStage(s) {
     formTitle.textContent = "✏️ Editar Etapa de Itinerario";
     btnCancel.style.display = "inline-block";
     btnSave.textContent = "💾 Guardar Cambios";
+
+    // Show themes panel inside form (writable mode)
+    showTemasForStage(s.nombre, false);
 }
 
 function viewStage(s) {
@@ -462,9 +496,10 @@ function viewStage(s) {
         });
     }
 
-    // Hide Save Button
-    btnSave.style.display = "none";
+    // Show themes panel inside form (read-only mode)
+    showTemasForStage(s.nombre, true);
 }
+
 
 async function deleteStage(id) {
     const confirmDelete = await window.customConfirm(
@@ -487,6 +522,7 @@ function resetForm() {
     enableAllInputs();
     editingId = null;
     inputNombre.value = "";
+    inputOrden.value = "";
     inputDetalle.value = "";
     inputOtros.value = "";
     selectRealidad.value = defaultRealidadId;
@@ -494,6 +530,11 @@ function resetForm() {
     formTitle.textContent = "📝 Registrar Etapa de Itinerario";
     btnCancel.style.display = "none";
     btnSave.textContent = "💾 Guardar Etapa";
+
+    // Hide themes manager block
+    const card = document.getElementById("temas-etapa-card");
+    if (card) card.style.display = "none";
+    selectedStageForThemes = null;
 }
 
 // ── Excel-style Column right click filtering ─────
@@ -635,5 +676,151 @@ function enforcePermissions() {
     const btnSave = document.getElementById("btn-save-itinerario");
     if (btnSave && !window.hasPermission("itinerario_guardar")) {
         btnSave.style.display = "none";
+    }
+}
+
+async function showTemasForStage(stageName, isReadOnly = false) {
+    selectedStageForThemes = stageName;
+    document.getElementById("temas-card-title").textContent = `📚 Temas y Artículos: ${stageName}`;
+    document.getElementById("temas-etapa-card").style.display = "block";
+    resetTemaForm();
+
+    const input = document.getElementById("input-nuevo-tema");
+    const btn = document.getElementById("btn-agregar-tema");
+    if (input) input.disabled = isReadOnly;
+    if (btn) btn.disabled = isReadOnly;
+
+    await loadTemasForSelectedStage(isReadOnly);
+}
+
+async function loadTemasForSelectedStage(isReadOnly = false) {
+    const tbodyTemas = document.getElementById("temas-etapa-tbody");
+    tbodyTemas.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px; color:#7f8c8d;">Cargando temas...</td></tr>';
+
+    try {
+        const q = query(
+            collection(db, "temas"),
+            where("etapa", "==", selectedStageForThemes)
+        );
+        const snap = await getDocs(q);
+
+        currentThemesList = [];
+        tbodyTemas.innerHTML = '';
+
+        snap.forEach(d => {
+            currentThemesList.push({ id: d.id, ...d.data() });
+        });
+
+        // Sort themes by orden (numerically)
+        currentThemesList.sort((a, b) => {
+            const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
+            const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;
+            return ordA - ordB;
+        });
+
+        if (currentThemesList.length === 0) {
+            tbodyTemas.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px; color:#999;">No hay temas registrados para esta etapa.</td></tr>';
+            return;
+        }
+
+        currentThemesList.forEach(t => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="padding:8px; font-weight:700; color:#334155; text-align:center;">${t.orden !== undefined && t.orden !== null ? t.orden : "—"}</td>
+                <td style="padding:8px; font-size:0.88rem; color:#334155; font-weight:600;">${t.nombre}</td>
+                <td style="padding:8px; text-align:center;">
+                    <button class="btn btn-sm btn-outline btn-edit-tema" style="padding:4px; margin-right:4px; ${isReadOnly ? 'display:none;' : ''}" data-id="${t.id}">✏️</button>
+                    <button class="btn btn-sm btn-outline btn-delete-tema" style="padding:4px; color:red; border-color:#f5c6cb; ${isReadOnly ? 'display:none;' : ''}" data-id="${t.id}">✕</button>
+                </td>
+            `;
+
+            if (!isReadOnly) {
+                tr.querySelector(".btn-edit-tema").addEventListener("click", () => editTemaInline(t.id, t.nombre, t.orden));
+                tr.querySelector(".btn-delete-tema").addEventListener("click", () => deleteTemaForSelectedStage(t.id));
+            }
+            tbodyTemas.appendChild(tr);
+        });
+    } catch(err) {
+        console.error("Error loading themes:", err);
+        tbodyTemas.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:10px; color:red;">Error al cargar temas.</td></tr>';
+    }
+}
+
+function editTemaInline(id, name, orden) {
+    editingTemaId = id;
+    const input = document.getElementById("input-nuevo-tema");
+    if (input) input.value = name;
+
+    if (inputTemaOrden) inputTemaOrden.value = orden !== undefined && orden !== null ? orden : "";
+    
+    const btn = document.getElementById("btn-agregar-tema");
+    if (btn) btn.textContent = "💾 Actualizar";
+    
+    const cancelBtn = document.getElementById("btn-cancelar-tema");
+    if (cancelBtn) cancelBtn.style.display = "inline-block";
+}
+
+function resetTemaForm() {
+    editingTemaId = null;
+    const input = document.getElementById("input-nuevo-tema");
+    if (input) input.value = "";
+
+    if (inputTemaOrden) inputTemaOrden.value = "";
+    
+    const btn = document.getElementById("btn-agregar-tema");
+    if (btn) {
+        btn.textContent = "➕ Agregar";
+        btn.disabled = false;
+    }
+    
+    const cancelBtn = document.getElementById("btn-cancelar-tema");
+    if (cancelBtn) cancelBtn.style.display = "none";
+}
+
+async function addTemaForSelectedStage() {
+    const input = document.getElementById("input-nuevo-tema");
+    const val = input.value.trim();
+    if (!val || !selectedStageForThemes) return;
+
+    const tOrden = inputTemaOrden.value.trim() ? parseInt(inputTemaOrden.value.trim()) : null;
+
+    const btn = document.getElementById("btn-agregar-tema");
+    btn.disabled = true;
+
+    try {
+        if (editingTemaId) {
+            await updateDoc(doc(db, "temas", editingTemaId), {
+                nombre: val,
+                orden: tOrden
+            });
+            resetTemaForm();
+        } else {
+            await addDoc(collection(db, "temas"), {
+                nombre: val,
+                orden: tOrden,
+                etapa: selectedStageForThemes,
+                createdAt: new Date().toISOString()
+            });
+            input.value = "";
+            if (inputTemaOrden) inputTemaOrden.value = "";
+        }
+        await loadTemasForSelectedStage();
+    } catch(err) {
+        console.error("Error saving theme:", err);
+        alert("Error al guardar tema: " + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function deleteTemaForSelectedStage(id) {
+    if (!confirm("¿Está seguro de que desea eliminar este tema?")) return;
+
+    try {
+        await deleteDoc(doc(db, "temas", id));
+        await loadTemasForSelectedStage();
+    } catch(err) {
+        console.error("Error deleting theme:", err);
+        alert("Error al eliminar tema: " + err.message);
     }
 }
