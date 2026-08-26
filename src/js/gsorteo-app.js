@@ -223,7 +223,8 @@ async function loadHermanosComunidad() {
         allHermanos = [];
         snap.forEach(d => {
             const h = d.data();
-            if (h.comunidadId === selectedComunidadId && h.parroquiaId === selectedParroquiaId && h.activo !== false && h.razon !== "Comunidad Celeste") {
+            const hasMision = h.mision && h.mision.trim() !== "";
+            if (h.comunidadId === selectedComunidadId && h.parroquiaId === selectedParroquiaId && h.activo !== false && h.razon !== "Comunidad Celeste" && !hasMision) {
                 const nombre = `${h.primerNombre} ${h.primerApellido || ""}`.trim();
                 allHermanos.push({
                     id: d.id,
@@ -320,10 +321,18 @@ function configureSorteoSteps() {
 function populateTemasDropdown(overrideStage = null) {
     selectTema.innerHTML = '<option value="">— Seleccionar Tema —</option>';
     const targetStage = overrideStage || selectedComunidadEtapa;
-    const filtered = allTemas.filter(t => t.etapa.toLowerCase() === targetStage.toLowerCase());
+    const filtered = allTemas.filter(t => t.etapa && t.etapa.toLowerCase() === targetStage.toLowerCase());
     
+    // Sort by order number
+    filtered.sort((a, b) => {
+        const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
+        const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;
+        return ordA - ordB;
+    });
+
     filtered.forEach(t => {
-        selectTema.appendChild(new Option(t.nombre, t.id));
+        const label = t.orden !== undefined && t.orden !== null ? `${t.orden}. ${t.nombre}` : t.nombre;
+        selectTema.appendChild(new Option(label, t.id));
     });
 }
 
@@ -702,10 +711,25 @@ async function loadTemas() {
         snap.forEach(d => {
             const t = { id: d.id, ...d.data() };
             allTemas.push(t);
+        });
 
+        // Sort by stage name and order number
+        allTemas.sort((a, b) => {
+            const stageA = a.etapa || "";
+            const stageB = b.etapa || "";
+            const stageComp = stageA.localeCompare(stageB);
+            if (stageComp !== 0) return stageComp;
+            
+            const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
+            const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;
+            return ordA - ordB;
+        });
+
+        allTemas.forEach(t => {
             const tr = document.createElement("tr");
+            const labelNombre = t.orden !== undefined && t.orden !== null ? `${t.orden}. ${t.nombre}` : t.nombre;
             tr.innerHTML = `
-                <td style="padding:8px; font-size:0.85rem; color:#1e293b; font-weight:600;">${t.nombre}</td>
+                <td style="padding:8px; font-size:0.85rem; color:#1e293b; font-weight:600;">${labelNombre}</td>
                 <td style="padding:8px; font-size:0.82rem; color:#64748b;">${t.etapa}</td>
                 <td style="padding:8px; text-align:center;">
                     <button class="btn-edit-tema" data-id="${t.id}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:600; font-size:0.8rem; margin-right:8px;">Editar</button>

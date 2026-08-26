@@ -629,6 +629,16 @@ const PERMISSIONS_TREE = [
     ]
   },
   {
+    id: "datos",
+    label: "Datos",
+    children: [
+      { id: "datos_ver", label: "Ver módulo de Datos" },
+      { id: "datos_crear", label: "Crear datos" },
+      { id: "datos_editar", label: "Editar datos" },
+      { id: "datos_eliminar", label: "Eliminar datos" }
+    ]
+  },
+  {
     id: "ajuste",
     label: "Ajuste",
     children: [

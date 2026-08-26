@@ -22,6 +22,7 @@ const btnCancel      = document.getElementById("btn-cancel");
 const btnDelete      = document.getElementById("btn-delete");
 
 const hActivo        = document.getElementById("h-activo");
+const hMision        = document.getElementById("h-mision");
 const hParroquia     = document.getElementById("h-parroquia");
 const hComunidad     = document.getElementById("h-comunidad");
 const hSexo          = document.getElementById("h-sexo");
@@ -80,6 +81,7 @@ window.addEventListener("app:ready", async (e) => {
     await loadParroquias();
     await cacheAllComunidades();
     await loadCarismas();
+    await loadMisiones();
     await loadHermanos();
     setupCivilStateToggle();
     setupHijosTableTrigger();
@@ -360,6 +362,25 @@ async function loadCarismas() {
         renderCarismasChecks();
     } catch(e) {
         console.error("Error al cargar carismas:", e);
+    }
+}
+
+// ── Cargar Misiones para el formulario ────────────
+let todosMisiones = [];
+async function loadMisiones() {
+    try {
+        const snap = await getDocs(query(collection(db, "misiones"), orderBy("nombre")));
+        todosMisiones = [];
+        if (hMision) {
+            hMision.innerHTML = '<option value="">— Ninguna —</option>';
+            snap.forEach(d => {
+                const data = d.data();
+                todosMisiones.push({ id: d.id, ...data });
+                hMision.appendChild(new Option(data.nombre, data.nombre));
+            });
+        }
+    } catch(e) {
+        console.error("Error al cargar misiones:", e);
     }
 }
 
@@ -784,6 +805,7 @@ async function openEditForm(h) {
     formTitle.textContent = `✏️ Editar: ${h.primerNombre} ${h.primerApellido}`;
     
     hActivo.value = h.activo === false ? "false" : "true";
+    hMision.value = h.mision || "";
     hParroquia.value = h.parroquiaId || "";
     if (h.parroquiaId) {
         await loadComunidadesForParroquia(h.parroquiaId);
@@ -871,6 +893,7 @@ function clearForm() {
     enforcePermissions();
 
     hActivo.value = "true";
+    hMision.value = "";
     hParroquia.value = "";
     hComunidad.innerHTML = '<option value="">— Primero parroquia —</option>';
     hComunidad.disabled = true;
@@ -929,6 +952,7 @@ btnSave.addEventListener("click", async () => {
 
     const data = {
         activo: hActivo.value === "true",
+        mision: hMision.value || null,
         parroquiaId: hParroquia.value,
         comunidadId: hComunidad.value,
         sexo: hSexo.value,

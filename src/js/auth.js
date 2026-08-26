@@ -171,7 +171,8 @@ async function allowUserAccess(user) {
             "sortear.html": () => window.hasPermission("sortear_ver"),
             "gsorteo.html": () => window.hasPermission("sortear_ver"),
             "codComunidad.html": () => window.hasPermission("codigo_ver"),
-            "permisos.html": () => window.hasPermission("permisos_cuenta") || window.hasPermission("permisos_acceso") || window.hasPermission("impresion_seleccion_usuario")
+            "permisos.html": () => window.hasPermission("permisos_cuenta") || window.hasPermission("permisos_acceso") || window.hasPermission("impresion_seleccion_usuario"),
+            "datos.html": () => window.hasPermission("datos_ver")
         };
 
         if (pageGuards[basePage] && !pageGuards[basePage]()) {
@@ -227,6 +228,9 @@ async function allowUserAccess(user) {
         }
         if (window.hasPermission("permisos_cuenta") || window.hasPermission("permisos_acceso") || window.hasPermission("impresion_seleccion_usuario")) {
             html += `<a href="permisos.html" class="nav-link ${basePage === 'permisos.html' ? 'active' : ''}"><span class="nav-icon">🛡️</span> Permisos</a>`;
+        }
+        if (window.hasPermission("datos_ver")) {
+            html += `<a href="datos.html" class="nav-link ${basePage === 'datos.html' ? 'active' : ''}"><span class="nav-icon">📂</span> Datos</a>`;
         }
         
         navContainer.innerHTML = html;
