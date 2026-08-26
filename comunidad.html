@@ -137,6 +137,9 @@
                         <div class="profile-field"><div class="label">Tipo</div><div class="value" id="d-tipo">—</div></div>
                         <div class="profile-field"><div class="label">Catequista</div><div class="value" id="d-catequista">—</div></div>
                         <div class="profile-field"><div class="label">Etapa</div><div class="value" id="d-etapa">—</div></div>
+                        <div class="profile-field"><div class="label">Día de Celebración</div><div class="value" id="d-dia-celebracion">—</div></div>
+                        <div class="profile-field"><div class="label">Salón de Celebración</div><div class="value" id="d-salon-celebracion">—</div></div>
+                        <div class="profile-field"><div class="label">Hora de Celebración</div><div class="value" id="d-hora-celebracion">—</div></div>
                         <div class="profile-field"><div class="label">Hermanos Activos</div><div class="value" id="d-activos">0</div></div>
                         <div class="profile-field"><div class="label">Hermanos Inactivos</div><div class="value" id="d-inactivos">0</div></div>
                     </div>
@@ -169,6 +172,27 @@
                             <select id="c-etapa">
                                 <option value="">— Seleccionar Etapa —</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="c-dia-celebracion">Día de Celebración</label>
+                            <select id="c-dia-celebracion">
+                                <option value="">— Seleccionar —</option>
+                                <option value="Lunes">Lunes</option>
+                                <option value="Martes">Martes</option>
+                                <option value="Miércoles">Miércoles</option>
+                                <option value="Jueves">Jueves</option>
+                                <option value="Viernes">Viernes</option>
+                                <option value="Sábado">Sábado</option>
+                                <option value="Domingo">Domingo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="c-salon-celebracion">Salón de Celebración</label>
+                            <input type="text" id="c-salon-celebracion" placeholder="Ej: Salón Parroquial, Capilla...">
+                        </div>
+                        <div class="form-group">
+                            <label for="c-hora-celebracion">Hora de Celebración</label>
+                            <input type="time" id="c-hora-celebracion">
                         </div>
                         <div class="form-group full-width" style="margin-top:10px;">
                             <label style="font-weight:700; color:var(--primary); margin-bottom:8px; display:block;">Catequista</label>

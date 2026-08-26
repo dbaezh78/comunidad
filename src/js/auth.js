@@ -1584,7 +1584,7 @@ const printConfigs = {
             if (window.allStages && window.allStages.length > 0) {
                 return [...window.allStages];
             }
-            const snap = await getDocs(collection(db, "itinerarios"));
+            const snap = await getDocs(collection(db, "itinerario"));
             const list = [];
             snap.forEach(d => {
                 const item = d.data();

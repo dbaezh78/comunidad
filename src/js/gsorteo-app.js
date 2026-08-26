@@ -201,6 +201,10 @@ async function onComunidadChange() {
         if (userBanner && userBanner.style.display !== "none") {
             userBanner.innerHTML = `🏠 ${selectedComunidadNombre} &nbsp;|&nbsp; 🗺️ Etapa: ${selectedComunidadEtapa}`;
         }
+
+        if (com.diaCelebracion && inputFechaInicio) {
+            inputFechaInicio.value = getNextCelebrationDate(com.diaCelebracion);
+        }
     }
 
     // Load Sibling list of the selected community
@@ -214,6 +218,36 @@ async function onComunidadChange() {
 
     // Load History
     await loadHistorialSorteos();
+}
+
+function getNextCelebrationDate(diaSemana) {
+    if (!diaSemana) return "";
+    const daysMap = {
+        "domingo": 0, "dom": 0,
+        "lunes": 1, "lun": 1,
+        "martes": 2, "mar": 2,
+        "miércoles": 3, "miercoles": 3, "mie": 3,
+        "jueves": 4, "jue": 4,
+        "viernes": 5, "vie": 5,
+        "sábado": 6, "sabado": 6, "sab": 6
+    };
+
+    const targetDay = daysMap[diaSemana.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];
+    if (targetDay === undefined) return "";
+
+    const today = new Date();
+    const todayDay = today.getDay();
+
+    let daysUntil = targetDay - todayDay;
+    if (daysUntil <= 0) {
+        daysUntil += 7;
+    }
+
+    const nextDate = new Date(today.getTime() + daysUntil * 24 * 60 * 60 * 1000);
+    const yyyy = nextDate.getFullYear();
+    const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(nextDate.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 // Fetch Sibling List
@@ -263,12 +297,11 @@ function populateHeadsList() {
 // Show/hide UI inputs depending on type
 function onTipoSorteoChange() {
     const val = selectTipoSorteo.value;
+    paramSimpleGroup.style.display = "block"; // Always visible
     if (val === "Temas" || val === "Articulo") {
-        paramSimpleGroup.style.display = "none";
         paramTemasGroup.style.display = "block";
         populateTemasDropdown(val === "Articulo" ? "Traditio Symboli" : null);
     } else {
-        paramSimpleGroup.style.display = "block";
         paramTemasGroup.style.display = "none";
     }
 }
@@ -354,22 +387,29 @@ function ejecutarSorteo() {
     let groupsCount = checkedHeads.length;
     let targetSize = selectTamanoGrupos.value;
 
-    // Determine group size automatically if simple draw and auto-sizing is chosen
-    if (tipo === "Simple" && targetSize === "auto") {
+    // Determine group size automatically if auto-sizing is chosen
+    if (targetSize === "auto") {
         const total = allHermanos.length;
-        if (total >= 30) {
-            targetSize = 6;
-        } else if (total >= 20) {
-            targetSize = 5;
+        if (tipo === "Eucaristia") {
+            if (total <= 13) {
+                targetSize = 4;
+            } else {
+                targetSize = 5;
+            }
         } else {
-            targetSize = 4;
-        }
-    } else if (tipo === "Eucaristia") {
-        const total = allHermanos.length;
-        if (total <= 13) {
-            targetSize = 4;
-        } else {
-            targetSize = 5;
+            if (total >= 25) {
+                targetSize = 6;
+                if (groupsCount === 0) groupsCount = 4;
+            } else if (total >= 20) {
+                targetSize = 6;
+                if (groupsCount === 0) groupsCount = 4;
+            } else if (total > 12) {
+                targetSize = 5;
+                if (groupsCount === 0) groupsCount = Math.ceil(total / 5);
+            } else {
+                targetSize = 4;
+                if (groupsCount === 0) groupsCount = Math.ceil(total / 4);
+            }
         }
     } else {
         targetSize = parseInt(targetSize) || 5;
@@ -396,13 +436,28 @@ function ejecutarSorteo() {
 
     // If no heads selected, select heads automatically
     if (heads.length === 0) {
-        groupsCount = Math.max(1, Math.floor(allHermanos.length / targetSize));
+        if (groupsCount === 0) {
+            groupsCount = Math.max(1, Math.floor(allHermanos.length / targetSize));
+        }
         
-        // Randomly select G heads from the list, avoiding picking active spouses together if possible
+        // Randomly select G heads from the list, avoiding picking spouses of already selected heads
         const shuffled = [...remainingHermanos].sort(() => Math.random() - 0.5);
         for (let i = 0; i < groupsCount; i++) {
             if (shuffled.length > 0) {
-                const picked = shuffled.shift();
+                let pickedIdx = -1;
+                for (let s = 0; s < shuffled.length; s++) {
+                    const candidate = shuffled[s];
+                    const isSpouseOfExistingHead = heads.some(head => 
+                        head.data.esposoId === candidate.id || (candidate.data.estadoCivil === "Casado" && candidate.data.esposoId === head.id)
+                    );
+                    if (!isSpouseOfExistingHead) {
+                        pickedIdx = s;
+                        break;
+                    }
+                }
+                if (pickedIdx === -1) pickedIdx = 0;
+
+                const picked = shuffled.splice(pickedIdx, 1)[0];
                 const origIdx = remainingHermanos.findIndex(h => h.id === picked.id);
                 if (origIdx !== -1) {
                     heads.push(remainingHermanos.splice(origIdx, 1)[0]);
@@ -416,7 +471,7 @@ function ejecutarSorteo() {
     // Initialize groups
     for (let i = 0; i < groupsCount; i++) {
         const headHno = heads[i];
-        groups.push({
+        const group = {
             nombreGrupo: `Grupo de ${headHno.name}`,
             cabezasIds: [headHno.id],
             cabezasNames: [headHno.name],
@@ -425,7 +480,18 @@ function ejecutarSorteo() {
             temaId: "",
             temaNombre: "",
             fechaPresentacion: ""
-        });
+        };
+
+        // If the head has a spouse and the spouse is in remaining pool, auto-assign to same group
+        if (headHno.data.estadoCivil === "Casado" && headHno.data.esposoId) {
+            const spouseIdx = remainingHermanos.findIndex(h => h.id === headHno.data.esposoId);
+            if (spouseIdx !== -1) {
+                const spouseHno = remainingHermanos.splice(spouseIdx, 1)[0];
+                group.integrantesIds.push(spouseHno.id);
+                group.integrantesNames.push(`${spouseHno.name} (Cónyuge)`);
+            }
+        }
+        groups.push(group);
     }
 
     // Identify conyugal pairs among remaining siblings
@@ -649,8 +715,7 @@ async function loadHistorialSorteos() {
     try {
         const q = query(
             collection(db, "sorteos"), 
-            where("comunidadId", "==", selectedComunidadId),
-            orderBy("fechaSorteo", "desc")
+            where("comunidadId", "==", selectedComunidadId)
         );
         const snap = await getDocs(q);
 
@@ -659,14 +724,24 @@ async function loadHistorialSorteos() {
             return;
         }
 
+        const rawList = [];
         snap.forEach(d => {
-            const data = d.data();
-            const s = { id: d.id, ...data };
-            savedSorteos.push(s);
+            rawList.push({ id: d.id, ...d.data() });
+        });
+
+        // Sort in memory by fechaSorteo desc
+        rawList.sort((a, b) => {
+            const dateA = a.fechaSorteo || "";
+            const dateB = b.fechaSorteo || "";
+            return dateB.localeCompare(dateA);
+        });
+
+        rawList.forEach(data => {
+            savedSorteos.push(data);
 
             // Populate reuse select option
             const fDate = new Date(data.fechaSorteo).toLocaleDateString();
-            selectReutilizar.appendChild(new Option(`${data.tipo} (${fDate}) - ${data.grupos.length} grupos`, d.id));
+            selectReutilizar.appendChild(new Option(`${data.tipo} (${fDate}) - ${data.grupos.length} grupos`, data.id));
 
             // Create card in historial
             const card = document.createElement("div");

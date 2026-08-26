@@ -31,6 +31,12 @@ const cCatequistaHermano   = document.getElementById("c-catequista-hermano");
 const dCatequista        = document.getElementById("d-catequista");
 const dEtapa             = document.getElementById("d-etapa");
 const cEtapa             = document.getElementById("c-etapa");
+const cDiaCelebracion    = document.getElementById("c-dia-celebracion");
+const cSalonCelebracion  = document.getElementById("c-salon-celebracion");
+const cHoraCelebracion   = document.getElementById("c-hora-celebracion");
+const dDiaCelebracion    = document.getElementById("d-dia-celebracion");
+const dSalonCelebracion  = document.getElementById("d-salon-celebracion");
+const dHoraCelebracion   = document.getElementById("d-hora-celebracion");
 const dActivos           = document.getElementById("d-activos");
 const dInactivos         = document.getElementById("d-inactivos");
 
@@ -317,6 +323,9 @@ function renderDatosView(c, nombreParroquia) {
 
     // Mostrar etapa
     dEtapa.textContent = c.etapaNombre || "—";
+    dDiaCelebracion.textContent = c.diaCelebracion || "—";
+    dSalonCelebracion.textContent = c.salonCelebracion || "—";
+    dHoraCelebracion.textContent = c.horaCelebracion || "—";
 
     const origenWrapView = document.getElementById("d-origen-wrap");
     if (c.comunidadesOrigen?.length) {
@@ -341,6 +350,9 @@ btnToggleDatos.addEventListener("click", async () => {
     cTipo.value   = c.tipo || "normal";
     cOrigen.value = (c.comunidadesOrigen || []).join(", ");
     cEtapa.value  = c.etapaId || "";
+    cDiaCelebracion.value = c.diaCelebracion || "";
+    cSalonCelebracion.value = c.salonCelebracion || "";
+    cHoraCelebracion.value = c.horaCelebracion || "";
     origenWrap.style.display = (c.tipo !== "normal") ? "block" : "none";
 
     // Pre-cargar selectores de catequista si tiene uno guardado
@@ -438,6 +450,9 @@ btnSaveDatos.addEventListener("click", async () => {
         tipo:               cTipo.value,
         etapaId:            etapaId,
         etapaNombre:        etapaNombre,
+        diaCelebracion:     cDiaCelebracion.value || null,
+        salonCelebracion:   cSalonCelebracion.value.trim() || null,
+        horaCelebracion:    cHoraCelebracion.value || null,
         catequistaId:       catId,
         catequistaNombre:   catNombre,
         catequistaTelefono: catTelefono,
