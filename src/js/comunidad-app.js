@@ -62,6 +62,7 @@ let responsablesAsignados = {};       // { 1: {hermanoId, parejaId, esCasado}, .
 let cachedParroquias     = {};        // parroquiaId -> nombre
 window.todasComunidades     = [];        // all communities in system
 let isCreatingNew        = false;
+let allItinerarios       = [];
 let loggedInUserComunidadId = null;
 let loggedInUserParroquiaId = null;
 let loggedInUserRole      = "hermano";
@@ -124,14 +125,38 @@ window.addEventListener("app:ready", async (e) => {
 
 async function loadItinerarios() {
     cEtapa.innerHTML = '<option value="">— Seleccionar Etapa —</option>';
+    allItinerarios = [];
     try {
         const snap = await getDocs(query(collection(db, "itinerario"), orderBy("createdAt", "asc")));
         snap.forEach(d => {
-            cEtapa.appendChild(new Option(d.data().nombre, d.id));
+            const data = { id: d.id, nombre: d.data().nombre };
+            allItinerarios.push(data);
+            cEtapa.appendChild(new Option(data.nombre, data.id));
         });
+        renderEtapasFechasTable();
     } catch(e) {
         console.error("Error loading stages list:", e);
     }
+}
+
+function renderEtapasFechasTable() {
+    const tbody = document.getElementById("comunidad-etapas-fechas-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    const canSaveFechas = !window.hasPermission || window.hasPermission("comunidad_guardar_fechas");
+    
+    allItinerarios.forEach(it => {
+        const row = document.createElement("tr");
+        row.style.borderBottom = "1px solid #e2e8f0";
+        row.innerHTML = `
+            <td style="padding: 8px 6px; color: #334155; font-weight: 500;">${it.nombre}</td>
+            <td style="padding: 8px 6px;">
+                <input type="date" class="comunidad-etapa-date-input" data-etapa-id="${it.id}" ${canSaveFechas ? "" : "disabled"} style="width: 100%; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.8rem; font-family: sans-serif;">
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
 }
 
 // ── Parroquias ────────────────────────────────────
@@ -260,6 +285,11 @@ btnNueva.addEventListener("click", async () => {
     cEtapa.value  = "";
     origenWrap.style.display = "none";
 
+    // Clear stages dates in form
+    document.querySelectorAll(".comunidad-etapa-date-input").forEach(input => {
+        input.value = "";
+    });
+
     // Limpiar Catequista
     cCatequistaParroquia.value = "";
     cCatequistaComunidad.innerHTML = '<option value="">— Seleccionar comunidad —</option>';
@@ -334,6 +364,32 @@ function renderDatosView(c, nombreParroquia) {
     } else {
         origenWrapView.style.display = "none";
     }
+
+    // Render read-only stages completed
+    const readList = document.getElementById("read-comunidad-etapas-list");
+    if (readList) {
+        readList.innerHTML = '';
+        const stagesFechas = c.etapasFechas || {};
+        const completedStages = [];
+        
+        allItinerarios.forEach(it => {
+            if (stagesFechas[it.id]) {
+                const formatted = stagesFechas[it.id].split("-").reverse().join("/");
+                completedStages.push({ nombre: it.nombre, fecha: formatted });
+            }
+        });
+        
+        if (completedStages.length === 0) {
+            readList.innerHTML = '<span style="font-size:0.82rem; color:#64748b; font-style:italic;">No hay registros de etapas concluidas.</span>';
+        } else {
+            completedStages.forEach(cs => {
+                const badge = document.createElement("span");
+                badge.style.cssText = "background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem; font-weight: 500; color: #475569;";
+                badge.innerHTML = `🎓 <strong>${cs.nombre}</strong> (${cs.fecha})`;
+                readList.appendChild(badge);
+            });
+        }
+    }
 }
 
 // ── Editor datos ──────────────────────────────────
@@ -354,6 +410,13 @@ btnToggleDatos.addEventListener("click", async () => {
     cSalonCelebracion.value = c.salonCelebracion || "";
     cHoraCelebracion.value = c.horaCelebracion || "";
     origenWrap.style.display = (c.tipo !== "normal") ? "block" : "none";
+
+    // Load stages dates in form
+    const stagesFechas = c.etapasFechas || {};
+    document.querySelectorAll(".comunidad-etapa-date-input").forEach(input => {
+        const stageId = input.getAttribute("data-etapa-id");
+        input.value = stagesFechas[stageId] || "";
+    });
 
     // Pre-cargar selectores de catequista si tiene uno guardado
     cCatequistaParroquia.value = "";
@@ -444,6 +507,15 @@ btnSaveDatos.addEventListener("click", async () => {
     const etapaId = cEtapa.value || null;
     const etapaNombre = etapaId ? cEtapa.options[cEtapa.selectedIndex].text : null;
 
+    // Collect stage dates
+    const etapasFechas = {};
+    document.querySelectorAll(".comunidad-etapa-date-input").forEach(input => {
+        const stageId = input.getAttribute("data-etapa-id");
+        if (input.value) {
+            etapasFechas[stageId] = input.value;
+        }
+    });
+
     const data = {
         numero:             numToSave,
         fechaFormacion:     cFecha.value || null,
@@ -459,6 +531,7 @@ btnSaveDatos.addEventListener("click", async () => {
         comunidadesOrigen:  cTipo.value !== "normal"
                             ? cOrigen.value.split(",").map(s => s.trim()).filter(Boolean)
                             : [],
+        etapasFechas:       etapasFechas,
         updatedAt: new Date().toISOString(),
     };
 

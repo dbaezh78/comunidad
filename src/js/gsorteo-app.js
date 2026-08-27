@@ -21,6 +21,8 @@ const selectTamanoGrupos = document.getElementById("asistente-tamano-grupos");
 const paramSimpleGroup = document.getElementById("param-simple-group");
 const paramTemasGroup = document.getElementById("param-temas-group");
 const selectTema = document.getElementById("asistente-tema-select");
+const paramSalmosGroup = document.getElementById("param-salmos-group");
+const selectSalmo = document.getElementById("asistente-salmo-select");
 const inputFechaInicio = document.getElementById("asistente-fecha-inicio");
 const btnEjecutarSorteo = document.getElementById("btn-ejecutar-sorteo");
 const resultadosContainer = document.getElementById("resultados-sorteo-container");
@@ -32,6 +34,9 @@ const btnCloseModalEncuesta = document.getElementById("btn-close-modal-encuesta"
 
 // Tab 2: Historial
 const historialListaContainer = document.getElementById("historial-lista-container");
+
+// Tab 3: Presentados
+const presentadosListaContainer = document.getElementById("presentados-lista-container");
 
 // Tab 3: Temas
 const temaForm = document.getElementById("tema-form");
@@ -57,6 +62,8 @@ let currentResults = null;
 let editingTemaId = null;
 let savedSorteos = [];
 let allTemas = [];
+let catalogTemas = [];
+let allCatalogos = [];
 
 let loggedInUserComunidadId = null;
 let loggedInUserParroquiaId = null;
@@ -90,6 +97,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     btnEjecutarSorteo.addEventListener("click", ejecutarSorteo);
     btnGuardarSorteo.addEventListener("click", guardarSorteoResultados);
 
+    // Sorteos Externos Listeners
+    const btnAgregarGrupoExterno = document.getElementById("btn-externo-agregar-grupo");
+    if (btnAgregarGrupoExterno) {
+        btnAgregarGrupoExterno.addEventListener("click", addExternoGroupCard);
+    }
+    const formSorteoExterno = document.getElementById("form-sorteo-externo");
+    if (formSorteoExterno) {
+        formSorteoExterno.addEventListener("submit", saveSorteoExterno);
+    }
+    const selectExternoTipoSorteo = document.getElementById("externo-tipo-sorteo");
+    if (selectExternoTipoSorteo) {
+        selectExternoTipoSorteo.addEventListener("change", () => {
+            const container = document.getElementById("externo-grupos-list-container");
+            if (container) container.innerHTML = "";
+            externoGroupCounter = 0;
+        });
+    }
+
     if (btnCloseModalEncuesta) {
         btnCloseModalEncuesta.addEventListener("click", () => {
             modalEncuestaTraditio.classList.remove("open");
@@ -107,12 +132,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     temaForm.addEventListener("submit", saveTema);
     btnCancelTema.addEventListener("click", resetTemaForm);
 
+    // Populate Psalms select element
+    if (selectSalmo) {
+        selectSalmo.innerHTML = '<option value="">— Seleccionar Salmo —</option>';
+        for (let i = 1; i <= 150; i++) {
+            selectSalmo.appendChild(new Option(`Salmo ${i}`, i));
+        }
+    }
+
     // Initial themes load
     await loadTemas();
 });
 
 // App ready listener from Auth
 window.addEventListener("app:ready", async (e) => {
+    await loadCatalogosForSorteo();
     const user = e.detail;
     if (user && user.email) {
         try {
@@ -149,6 +183,8 @@ window.addEventListener("app:ready", async (e) => {
             }
         }
     }
+
+    enforcePermissions();
 });
 
 // Load Parroquias
@@ -171,6 +207,15 @@ async function loadParroquias() {
 
 // Parroquia Change
 async function onParroquiaChange() {
+    // Security Guard: Prevent F12 attribute manipulation
+    if (window.hasPermission && !window.hasPermission("sortear_seleccionar_parroquia")) {
+        if (selectParroquia.value !== loggedInUserParroquiaId) {
+            alert("Acceso denegado: No tiene permiso para cambiar de parroquia.");
+            selectParroquia.value = loggedInUserParroquiaId || "";
+            return;
+        }
+    }
+
     selectedParroquiaId = selectParroquia.value;
     selectComunidad.innerHTML = '<option value="">— Primero parroquia —</option>';
     selectComunidad.disabled = true;
@@ -182,7 +227,7 @@ async function onParroquiaChange() {
     try {
         const snap = await getDocs(collection(db, "parroquias", selectedParroquiaId, "comunidades"));
         selectComunidad.innerHTML = '<option value="">— Seleccionar Comunidad —</option>';
-        selectComunidad.disabled = false;
+        selectComunidad.disabled = window.hasPermission && !window.hasPermission("sortear_seleccionar_comunidad");
         allComunidades = [];
         cachedComunidades = {};
 
@@ -197,8 +242,65 @@ async function onParroquiaChange() {
     }
 }
 
+async function loadCatalogosForSorteo() {
+    try {
+        const snap = await getDocs(collection(db, "catalogos"));
+        allCatalogos = [];
+        snap.forEach(d => {
+            allCatalogos.push({ id: d.id, ...d.data() });
+        });
+    } catch(err) {
+        console.error("Error loading catalogs for sorteo:", err);
+    }
+}
+
+async function loadTemasForCurrentComunidad() {
+    if (!selectedComunidadId) return;
+    const com = allComunidades.find(c => c.id === selectedComunidadId);
+    if (!com) return;
+    
+    // Find matching catalog for the community's stage
+    const matchingCatalog = allCatalogos.find(cat => cat.etapaId === com.etapaId);
+    catalogTemas = [];
+    
+    if (matchingCatalog) {
+        try {
+            const snap = await getDocs(collection(db, matchingCatalog.code));
+            snap.forEach(d => {
+                const data = d.data();
+                catalogTemas.push({
+                    id: d.id,
+                    nombre: data.nombre,
+                    descripcion: data.descripcion || "",
+                    orden: data.orden !== undefined ? data.orden : 999,
+                    etapa: selectedComunidadEtapa // map it so populateTemasDropdown correctly matches selectedComunidadEtapa
+                });
+            });
+            console.log(`Loaded ${catalogTemas.length} themes from dynamic catalog: ${matchingCatalog.nombre}`);
+            return;
+        } catch(err) {
+            console.error("Error loading themes from catalog:", err);
+        }
+    }
+    
+    // Fallback: Populate catalogTemas from global allTemas collection for current stage
+    if (allTemas && allTemas.length > 0) {
+        catalogTemas = allTemas.filter(t => t.etapa && t.etapa.toLowerCase() === selectedComunidadEtapa.toLowerCase());
+        console.log(`Loaded ${catalogTemas.length} fallback themes from global collection for stage ${selectedComunidadEtapa}`);
+    }
+}
+
 // Comunidad Change
 async function onComunidadChange() {
+    // Security Guard: Prevent F12 attribute manipulation
+    if (window.hasPermission && !window.hasPermission("sortear_seleccionar_comunidad")) {
+        if (selectComunidad.value !== loggedInUserComunidadId) {
+            alert("Acceso denegado: No tiene permiso para cambiar de comunidad.");
+            selectComunidad.value = loggedInUserComunidadId || "";
+            return;
+        }
+    }
+
     selectedComunidadId = selectComunidad.value;
     labelEtapaActual.textContent = "—";
     headsCheckboxesList.innerHTML = '';
@@ -229,11 +331,19 @@ async function onComunidadChange() {
     // Populate heads list
     populateHeadsList();
 
+    // Load Temas for current community stage
+    await loadTemasForCurrentComunidad();
+
+    // Load History & Presentados
+    await loadHistorialSorteos();
+    await loadPresentados();
+
     // Enable/disable steps based on selectedComunidadEtapa
     configureSorteoSteps();
 
-    // Load History
-    await loadHistorialSorteos();
+    if (selectTipoSorteo.value === "Salmos") {
+        updateSalmosRaffleUI();
+    }
 }
 
 function getNextCelebrationDate(diaSemana) {
@@ -320,6 +430,45 @@ function onTipoSorteoChange() {
     } else {
         paramTemasGroup.style.display = "none";
     }
+
+    if (val === "Salmos") {
+        if (paramSalmosGroup) paramSalmosGroup.style.display = "block";
+        updateSalmosRaffleUI();
+    } else {
+        if (paramSalmosGroup) paramSalmosGroup.style.display = "none";
+    }
+}
+
+function updateSalmosRaffleUI() {
+    let lastSalmo = 0;
+    if (savedSorteos && savedSorteos.length > 0) {
+        const salmoSorteos = savedSorteos.filter(s => s.tipo === "Salmos");
+        if (salmoSorteos.length > 0) {
+            salmoSorteos.sort((a, b) => {
+                const dateA = a.fechaSorteo || a.createdAt || "";
+                const dateB = b.fechaSorteo || b.createdAt || "";
+                return dateB.localeCompare(dateA);
+            });
+            const lastSorteo = salmoSorteos[0];
+            if (lastSorteo.grupos && lastSorteo.grupos.length > 0) {
+                const groupWithSalmo = lastSorteo.grupos.find(g => g.temaNombre && g.temaNombre.startsWith("Salmo "));
+                if (groupWithSalmo) {
+                    const numStr = groupWithSalmo.temaNombre.replace("Salmo ", "").trim();
+                    lastSalmo = parseInt(numStr) || 0;
+                }
+            }
+        }
+    }
+
+    const badge = document.getElementById("ultimo-salmo-badge");
+    if (badge) {
+        badge.textContent = lastSalmo > 0 ? lastSalmo : "—";
+    }
+
+    if (selectSalmo) {
+        const nextSalmo = lastSalmo > 0 ? (lastSalmo % 150) + 1 : 1;
+        selectSalmo.value = nextSalmo;
+    }
 }
 
 function onChkReutilizarChange() {
@@ -382,8 +531,54 @@ function configureSorteoSteps() {
 // Populate themes dropdown
 function populateTemasDropdown(overrideStage = null) {
     selectTema.innerHTML = '<option value="">— Seleccionar Tema —</option>';
+    
+    const val = selectTipoSorteo.value;
+    const sourceArray = val === "Temas" ? catalogTemas : allTemas;
     const targetStage = overrideStage || selectedComunidadEtapa;
-    const filtered = allTemas.filter(t => t.etapa && t.etapa.toLowerCase() === targetStage.toLowerCase());
+
+    // Filter themes belonging to this stage
+    const stageThemes = sourceArray.filter(t => t.etapa && t.etapa.toLowerCase() === targetStage.toLowerCase());
+
+    const stageThemeIds = new Set(stageThemes.map(t => t.id));
+
+    // Initialize counts for each theme in this stage
+    const counts = {};
+    stageThemes.forEach(t => {
+        counts[t.id] = { drawn: 0, pending: 0, presented: 0 };
+    });
+
+    // Populate counts from savedSorteos
+    if (savedSorteos) {
+        savedSorteos.forEach(s => {
+            if (s.grupos) {
+                s.grupos.forEach(g => {
+                    if (g.temaId && stageThemeIds.has(g.temaId)) {
+                        counts[g.temaId].drawn++;
+                        if (!g.presentado) {
+                            counts[g.temaId].pending++;
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    // Calculate presented counts and find the minimum presented count
+    let minPresented = Infinity;
+    stageThemes.forEach(t => {
+        const c = counts[t.id];
+        c.presented = c.drawn - c.pending;
+        if (c.presented < minPresented) {
+            minPresented = c.presented;
+        }
+    });
+
+    // Filter themes matching stage and matching cycle requirements
+    const filtered = stageThemes.filter(t => {
+        const c = counts[t.id];
+        // Theme is available if it has no pending presentations AND its presented count is at the minimum level (i.e. has not advanced to the next cycle yet)
+        return c.pending === 0 && c.presented === minPresented;
+    });
     
     // Sort by order number
     filtered.sort((a, b) => {
@@ -396,6 +591,10 @@ function populateTemasDropdown(overrideStage = null) {
         const label = t.orden !== undefined && t.orden !== null ? `${t.orden}. ${t.nombre}` : t.nombre;
         selectTema.appendChild(new Option(label, t.id));
     });
+
+    if (filtered.length > 0) {
+        selectTema.value = filtered[0].id;
+    }
 }
 
 // ── SORTEO ENGINE ALGORITHM ────────────────────────
@@ -582,8 +781,11 @@ function ejecutarSorteo() {
             return;
         }
 
-        const initialThemeObj = allTemas.find(t => t.id === themeId);
-        const stageThemes = allTemas.filter(t => t.etapa.toLowerCase() === selectedComunidadEtapa.toLowerCase());
+        const sourceArray = tipo === "Temas" ? catalogTemas : allTemas;
+        const targetStage = tipo === "Articulo" ? "Traditio Symboli" : selectedComunidadEtapa;
+
+        const initialThemeObj = sourceArray.find(t => t.id === themeId);
+        const stageThemes = sourceArray.filter(t => t.etapa.toLowerCase() === targetStage.toLowerCase());
         
         let startMoment = new Date(startDateStr + "T00:00:00");
 
@@ -622,6 +824,39 @@ function ejecutarSorteo() {
                 distributeEncuestas(group, groupMembers, poolToSurvey);
             });
         }
+    }
+
+    if (tipo === "Salmos") {
+        const salmoId = selectSalmo ? selectSalmo.value : "";
+        if (!salmoId) {
+            alert("Por favor, seleccione un salmo inicial para continuar.");
+            return;
+        }
+        const startSalmoNum = parseInt(salmoId);
+        
+        let startMoment = null;
+        const com = allComunidades.find(c => c.id === selectedComunidadId);
+        if (com && com.diaCelebracion) {
+            const nextCelebrationDateStr = getNextCelebrationDate(com.diaCelebracion);
+            if (nextCelebrationDateStr) {
+                startMoment = new Date(nextCelebrationDateStr + "T00:00:00");
+            }
+        }
+        if (!startMoment) {
+            startMoment = new Date();
+        }
+
+        groups.forEach((group, idx) => {
+            group.temaNombre = `Salmo ${startSalmoNum}`;
+            group.temaId = `salmo_${startSalmoNum}`;
+
+            // Same celebration date for all groups in this celebration
+            const presentationDate = new Date(startMoment.getTime());
+            const yyyy = presentationDate.getFullYear();
+            const mm = String(presentationDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(presentationDate.getDate()).padStart(2, '0');
+            group.fechaPresentacion = `${yyyy}-${mm}-${dd}`;
+        });
     }
 
     currentResults = groups;
@@ -754,6 +989,96 @@ function getOrCreateEncuesta(group, memberId, memberName) {
     return Object.values(group.encuestas)[0] || null;
 }
 
+function getSpouseMap() {
+    const spouseMap = {};
+    if (Array.isArray(allHermanos)) {
+        allHermanos.forEach(h => {
+            if (h.data && h.data.esposoId) {
+                spouseMap[h.id] = h.data.esposoId;
+                spouseMap[h.data.esposoId] = h.id;
+            }
+        });
+    }
+    return spouseMap;
+}
+
+function getGroupCouples(group, spouseMap) {
+    const couples = [];
+    const allMembers = [];
+    group.cabezasIds?.forEach((id, idx) => {
+        allMembers.push({ id, name: group.cabezasNames[idx] });
+    });
+    group.integrantesIds?.forEach((id, idx) => {
+        allMembers.push({ id, name: group.integrantesNames[idx] });
+    });
+
+    const used = new Set();
+    // 1. Match by spouseMap
+    for (let i = 0; i < allMembers.length; i++) {
+        const m1 = allMembers[i];
+        if (!m1.id || used.has(m1.id)) continue;
+        const spouseId = spouseMap[m1.id];
+        if (spouseId) {
+            const m2 = allMembers.find(m => m.id === spouseId);
+            if (m2 && !used.has(m2.id)) {
+                couples.push([m1.id, m2.id]);
+                used.add(m1.id);
+                used.add(m2.id);
+            }
+        }
+    }
+
+    // 2. Fallback matching " (Cónyuge)" suffix
+    for (let i = 0; i < allMembers.length; i++) {
+        const m1 = allMembers[i];
+        if (!m1.id || used.has(m1.id)) continue;
+        if (m1.name.includes("(Cónyuge)")) {
+            let partner = null;
+            const idx = allMembers.indexOf(m1);
+            if (idx > 0 && !used.has(allMembers[idx - 1].id)) {
+                partner = allMembers[idx - 1];
+            } else if (idx < allMembers.length - 1 && !used.has(allMembers[idx + 1].id)) {
+                partner = allMembers[idx + 1];
+            } else {
+                partner = allMembers.find(m => m.id && !used.has(m.id) && m.id !== m1.id);
+            }
+
+            if (partner) {
+                couples.push([m1.id, partner.id]);
+                used.add(m1.id);
+                used.add(partner.id);
+            }
+        }
+    }
+
+    return couples;
+}
+
+function getMemberBadgeAndStyle(id, name, isCabeza, coupleIdx) {
+    const coupleColors = [
+        { bg: "#dbeafe", text: "#1e40af" }, // Light Blue
+        { bg: "#dcfce7", text: "#166534" }, // Light Green
+        { bg: "#ffe4e6", text: "#9f1239" }, // Light Pink
+        { bg: "#fef9c3", text: "#854d0e" }, // Light Yellow
+        { bg: "#f3e8ff", text: "#6b21a8" }  // Light Purple
+    ];
+
+    if (coupleIdx !== undefined) {
+        const color = coupleColors[coupleIdx % coupleColors.length];
+        return {
+            badgeHTML: `<span class="badge-role" style="background:${color.bg}; color:${color.text}; border: none;">Matrimonio</span>`,
+            style: `cursor:pointer; border-radius:4px; padding:3px 6px; background-color: ${color.bg}15;`
+        };
+    } else {
+        return {
+            badgeHTML: isCabeza 
+                ? `<span class="badge-role badge-head">Cabeza</span>` 
+                : `<span class="badge-role badge-member">Integrante</span>`,
+            style: `cursor:pointer; border-radius:4px; padding:3px 6px;`
+        };
+    }
+}
+
 function openEncuestaModal(group, memberId, memberName) {
     const enc = getOrCreateEncuesta(group, memberId, memberName);
     if (!enc) {
@@ -764,21 +1089,42 @@ function openEncuestaModal(group, memberId, memberName) {
     const parts = (enc.fechaPresentacion || group.fechaPresentacion || "").split("-");
     const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (enc.fechaPresentacion || group.fechaPresentacion || "—");
 
+    const spouseMap = getSpouseMap();
+    const surveyGroupObj = {
+        cabezasIds: [enc.responsableId],
+        cabezasNames: [enc.responsableNombre],
+        integrantesIds: enc.encuestadosIds || [],
+        integrantesNames: enc.encuestadosNames || []
+    };
+    const surveyCouples = getGroupCouples(surveyGroupObj, spouseMap);
+    const surveyMemberCoupleIdx = {};
+    surveyCouples.forEach((couple, cIdx) => {
+        couple.forEach(id => {
+            surveyMemberCoupleIdx[id] = cIdx;
+        });
+    });
+
     let encuestadosHTML = '';
     if (!enc.encuestadosNames || enc.encuestadosNames.length === 0) {
         encuestadosHTML = `<div style="font-size:0.85rem; color:#64748b; font-style:italic; padding:6px 0;">No hay hermanos asignados para encuestar.</div>`;
     } else {
-        enc.encuestadosNames.forEach(name => {
-            const isSpouse = name.includes("(Cónyuge)");
+        enc.encuestadosNames.forEach((name, mIdx) => {
+            const mId = enc.encuestadosIds ? enc.encuestadosIds[mIdx] : "";
             const cleanName = name.replace(" (Cónyuge)", "");
+            const coupleIdx = surveyMemberCoupleIdx[mId];
+            const badgeData = getMemberBadgeAndStyle(mId, cleanName, false, coupleIdx);
+
             encuestadosHTML += `
-                <div class="sorteo-member-item">
+                <div class="sorteo-member-item" style="${badgeData.style}">
                     <span>👤 ${cleanName}</span>
-                    <span class="badge-role ${isSpouse ? 'badge-spouse' : 'badge-member'}">${isSpouse ? 'Cónyuge' : 'Integrante'}</span>
+                    ${badgeData.badgeHTML}
                 </div>
             `;
         });
     }
+
+    const respCoupleIdx = surveyMemberCoupleIdx[enc.responsableId];
+    const respBadgeData = getMemberBadgeAndStyle(enc.responsableId, enc.responsableNombre, true, respCoupleIdx);
 
     modalEncuestaCardContainer.innerHTML = `
         <div class="sorteo-group-card" style="margin:0; box-shadow:none; border:1px solid #e2e8f0; background:#ffffff;">
@@ -787,9 +1133,9 @@ function openEncuestaModal(group, memberId, memberName) {
                 <span style="font-size:0.85rem; color:#64748b;">(${enc.encuestadosNames.length + 1} pers.)</span>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px;">
-                <div class="sorteo-member-item">
+                <div class="sorteo-member-item" style="${respBadgeData.style}">
                     <span>👤 <strong>${enc.responsableNombre}</strong></span>
-                    <span class="badge-role badge-head">Cabeza</span>
+                    ${respBadgeData.badgeHTML}
                 </div>
                 ${encuestadosHTML}
             </div>
@@ -809,19 +1155,39 @@ function renderResultsGrid() {
     resultadosGrid.innerHTML = '';
     resultadosContainer.style.display = "block";
 
+    const spouseMap = getSpouseMap();
+
     currentResults.forEach((g, idx) => {
         const card = document.createElement("div");
         card.className = "sorteo-group-card";
+        if (selectTipoSorteo.value === "Salmos") {
+            card.style.backgroundColor = "#f4e73d14";
+        } else if (selectTipoSorteo.value === "Temas") {
+            card.style.backgroundColor = "#3b82f614";
+        } else if (selectTipoSorteo.value === "Articulo") {
+            card.style.backgroundColor = "#f43d3d14";
+        }
+
+        const groupCouples = getGroupCouples(g, spouseMap);
+        const memberCoupleIdx = {};
+        groupCouples.forEach((couple, cIdx) => {
+            couple.forEach(id => {
+                memberCoupleIdx[id] = cIdx;
+            });
+        });
 
         let membersHTML = '';
         
         // Heads
         g.cabezasNames.forEach((hName, hIdx) => {
             const hId = g.cabezasIds ? g.cabezasIds[hIdx] : "";
+            const coupleIdx = memberCoupleIdx[hId];
+            const badgeData = getMemberBadgeAndStyle(hId, hName, true, coupleIdx);
+
             membersHTML += `
-                <div class="sorteo-member-item clickable-encuesta-member" data-group-idx="${idx}" data-member-id="${hId}" data-member-name="${hName}" style="cursor:pointer; border-radius:4px; padding:3px 6px;" title="Ver grupo de encuesta de ${hName}">
+                <div class="sorteo-member-item clickable-encuesta-member" data-group-idx="${idx}" data-member-id="${hId}" data-member-name="${hName}" style="${badgeData.style}" title="Ver grupo de encuesta de ${hName}">
                     <span>👤 <strong>${hName}</strong></span>
-                    <span class="badge-role badge-head">Cabeza</span>
+                    ${badgeData.badgeHTML}
                 </div>
             `;
         });
@@ -829,33 +1195,46 @@ function renderResultsGrid() {
         // Members
         g.integrantesNames.forEach((mName, mIdx) => {
             const mId = g.integrantesIds ? g.integrantesIds[mIdx] : "";
-            const isSpouse = mName.includes("(Cónyuge)");
             const cleanName = mName.replace(" (Cónyuge)", "");
+            const coupleIdx = memberCoupleIdx[mId];
+            const badgeData = getMemberBadgeAndStyle(mId, cleanName, false, coupleIdx);
+
             membersHTML += `
-                <div class="sorteo-member-item clickable-encuesta-member" data-group-idx="${idx}" data-member-id="${mId}" data-member-name="${cleanName}" style="cursor:pointer; border-radius:4px; padding:3px 6px;" title="Ver grupo de encuesta de ${cleanName}">
+                <div class="sorteo-member-item clickable-encuesta-member" data-group-idx="${idx}" data-member-id="${mId}" data-member-name="${cleanName}" style="${badgeData.style}" title="Ver grupo de encuesta de ${cleanName}">
                     <span>👤 ${cleanName}</span>
-                    <span class="badge-role ${isSpouse ? 'badge-spouse' : 'badge-member'}">${isSpouse ? 'Cónyuge' : 'Integrante'}</span>
+                    ${badgeData.badgeHTML}
                 </div>
             `;
         });
 
+        let dropdownOptions = '';
+        currentResults.forEach((otherG, otherIdx) => {
+            const isSelected = otherIdx === idx ? 'selected' : '';
+            const headName = otherG.cabezasNames && otherG.cabezasNames[0] ? otherG.cabezasNames[0] : `Grupo ${otherIdx + 1}`;
+            dropdownOptions += `<option value="${otherIdx}" ${isSelected}>${headName}</option>`;
+        });
+
         let footerHTML = '';
-        if (g.temaNombre) {
-            // Formatear la fecha
-            const parts = g.fechaPresentacion.split("-");
-            const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : g.fechaPresentacion;
+        if (g.fechaPresentacion !== undefined) {
             footerHTML = `
                 <div style="margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9; font-size:0.85rem; color:#475569;">
-                    <div style="margin-bottom:3px;">📚 <strong>Tema:</strong> ${g.temaNombre}</div>
-                    <div>📅 <strong>Fecha:</strong> ${formattedDate}</div>
+                    ${g.temaNombre ? `<div style="margin-bottom:6px;">📚 <strong>Tema:</strong> ${g.temaNombre}</div>` : ''}
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span>📅 <strong>Fecha:</strong></span>
+                        <input type="date" class="group-date-input" data-group-idx="${idx}" value="${g.fechaPresentacion}" style="padding:3px 6px; font-size:0.8rem; border-radius:4px; border:1px solid #ccc; width:130px; font-family:sans-serif;">
+                    </div>
                 </div>
             `;
         }
 
         card.innerHTML = `
-            <div class="sorteo-group-header">
-                <span>${g.nombreGrupo}</span>
-                <span style="font-size:0.85rem; color:#64748b;">(${g.cabezasIds.length + g.integrantesIds.length} pers.)</span>
+            <div class="sorteo-group-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:4px; max-width:70%;">
+                    <select class="swap-group-head-select" data-group-idx="${idx}" style="font-size:1rem; font-weight:bold; color:var(--primary); border:none; background:transparent; padding:0; margin:0; cursor:pointer; width:100%; outline:none; -webkit-appearance:none; -moz-appearance:none; appearance:none; font-family:inherit;">
+                        ${dropdownOptions}
+                    </select>
+                </div>
+                <span style="font-size:0.85rem; color:#64748b; white-space:nowrap;">(${g.cabezasIds.length + g.integrantesIds.length} pers.)</span>
             </div>
             <div style="display:flex; flex-direction:column; gap:4px;">
                 ${membersHTML}
@@ -865,13 +1244,64 @@ function renderResultsGrid() {
         resultadosGrid.appendChild(card);
     });
 
-    // Add click listeners to members for Encuesta modal
+    // Add change listeners to sync edited dates
+    document.querySelectorAll(".group-date-input").forEach(input => {
+        input.addEventListener("change", (e) => {
+            const gIdx = parseInt(input.getAttribute("data-group-idx"));
+            if (currentResults && currentResults[gIdx]) {
+                currentResults[gIdx].fechaPresentacion = e.target.value;
+            }
+        });
+    });
+
+    // Add change listeners to swap group heads
+    document.querySelectorAll(".swap-group-head-select").forEach(select => {
+        select.addEventListener("change", (e) => {
+            const fromIdx = parseInt(select.getAttribute("data-group-idx"));
+            const toIdx = parseInt(e.target.value);
+            if (fromIdx === toIdx) return;
+
+            const g1 = currentResults[fromIdx];
+            const g2 = currentResults[toIdx];
+
+            // Swap group heads
+            const tempCabezasIds = g1.cabezasIds;
+            const tempCabezasNames = g1.cabezasNames;
+            g1.cabezasIds = g2.cabezasIds;
+            g1.cabezasNames = g2.cabezasNames;
+            g2.cabezasIds = tempCabezasIds;
+            g2.cabezasNames = tempCabezasNames;
+
+            // Swap integrantes
+            const tempIntegrantesIds = g1.integrantesIds;
+            const tempIntegrantesNames = g1.integrantesNames;
+            g1.integrantesIds = g2.integrantesIds;
+            g1.integrantesNames = g2.integrantesNames;
+            g2.integrantesIds = tempIntegrantesIds;
+            g2.integrantesNames = tempIntegrantesNames;
+
+            // Swap group names
+            const tempNombreGrupo = g1.nombreGrupo;
+            g1.nombreGrupo = g2.nombreGrupo;
+            g2.nombreGrupo = tempNombreGrupo;
+
+            // Swap encuestas
+            const tempEncuestas = g1.encuestas || null;
+            g1.encuestas = g2.encuestas || null;
+            g2.encuestas = tempEncuestas;
+
+            // Re-render
+            renderResultsGrid();
+        });
+    });
+
     document.querySelectorAll(".clickable-encuesta-member").forEach(el => {
+        const originalBg = el.style.backgroundColor || "transparent";
         el.addEventListener("mouseenter", () => {
             el.style.backgroundColor = "#f1f5f9";
         });
         el.addEventListener("mouseleave", () => {
-            el.style.backgroundColor = "transparent";
+            el.style.backgroundColor = originalBg;
         });
         el.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -934,14 +1364,15 @@ async function guardarSorteoResultados() {
         };
 
         await addDoc(collection(db, "sorteos"), sorteoData);
-        alert("🎉 Sorteo guardado correctamente.");
+        window.showAlert("🎉 Sorteo guardado correctamente.", "success");
         resultadosContainer.style.display = "none";
         currentResults = null;
         
         await loadHistorialSorteos();
+        await loadPresentados();
     } catch(err) {
         console.error("Error saving drawing:", err);
-        alert("Error al guardar sorteo: " + err.message);
+        window.showAlert("Error al guardar sorteo: " + err.message, "error");
     } finally {
         btnGuardarSorteo.disabled = false;
     }
@@ -949,6 +1380,9 @@ async function guardarSorteoResultados() {
 
 // Load Historial
 async function loadHistorialSorteos() {
+    const canCambiarFecha = !window.hasPermission || window.hasPermission("sortear_cambiar_fecha");
+    const canActivarPresentado = !window.hasPermission || window.hasPermission("sortear_activar_presentado");
+
     historialListaContainer.innerHTML = '';
     selectReutilizar.innerHTML = '<option value="">— Seleccionar sorteo anterior —</option>';
     savedSorteos = [];
@@ -981,53 +1415,301 @@ async function loadHistorialSorteos() {
 
         rawList.forEach(data => {
             savedSorteos.push(data);
-
             // Populate reuse select option
-            const fDate = new Date(data.fechaSorteo).toLocaleDateString();
+            const fDate = data.fechaSorteo ? new Date(data.fechaSorteo).toLocaleDateString() : "—";
             selectReutilizar.appendChild(new Option(`${data.tipo} (${fDate}) - ${data.grupos.length} grupos`, data.id));
+        });
 
-            // Create card in historial
-            const card = document.createElement("div");
-            card.style.cssText = "border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 12px; background: white;";
-            
-            let gruposSummary = '';
-            data.grupos.forEach((g, gIdx) => {
-                const isTraditio = data.tipo === "Articulo" || !!g.encuestas;
-                let cabezasHTML = g.cabezasNames?.map((n, i) => {
-                    const hId = g.cabezasIds ? g.cabezasIds[i] : "";
-                    return `<span class="${isTraditio ? 'hist-clickable-encuesta' : ''}" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${hId}" data-member-name="${n}" style="${isTraditio ? 'cursor:pointer; text-decoration:underline; font-weight:bold; color:var(--primary);' : ''}" title="${isTraditio ? 'Ver grupo de encuesta de ' + n : ''}">👤 ${n}</span>`;
-                }).join(", ") || "—";
+        // Group sorteos by tipo for display
+        const tipoOrder = ["Temas", "Salmos", "Articulo", "Simple", "Eucaristia"];
+        const groupedByTipo = {};
+        rawList.forEach(data => {
+            const t = data.tipo || "Simple";
+            if (!groupedByTipo[t]) groupedByTipo[t] = [];
+            groupedByTipo[t].push(data);
+        });
 
-                let integrantesHTML = g.integrantesNames?.map((n, i) => {
-                    const hId = g.integrantesIds ? g.integrantesIds[i] : "";
-                    const cleanName = n.replace(" (Cónyuge)", "");
-                    return `<span class="${isTraditio ? 'hist-clickable-encuesta' : ''}" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${hId}" data-member-name="${cleanName}" style="${isTraditio ? 'cursor:pointer; text-decoration:underline;' : ''}" title="${isTraditio ? 'Ver grupo de encuesta de ' + cleanName : ''}">👤 ${cleanName}</span>`;
-                }).join(", ") || "Ninguno";
+        const tiposToRender = tipoOrder.filter(t => groupedByTipo[t]);
+        const remainingTipos = Object.keys(groupedByTipo).filter(t => !tipoOrder.includes(t));
+        const renderOrder = [...tiposToRender, ...remainingTipos];
 
-                gruposSummary += `
-                    <div style="margin-top:8px; padding-left:12px; border-left:3px solid var(--primary);">
-                        <strong style="font-size:0.85rem; color:var(--primary);">${g.nombreGrupo}</strong>
-                        <div style="font-size:0.8rem; color:#475569; margin-top:4px;">
-                            Cabezas: ${cabezasHTML} <br>
-                            Integrantes: ${integrantesHTML}
-                            ${g.temaNombre ? `<br>📚 Tema: ${g.temaNombre} | 📅 Fecha: ${g.fechaPresentacion}` : ''}
-                        </div>
+        const canCambiarFecha = !window.hasPermission || window.hasPermission("sortear_cambiar_fecha");
+        const canActivarPresentado = !window.hasPermission || window.hasPermission("sortear_activar_presentado");
+
+        renderOrder.forEach(tipo => {
+            const sorteosDeTipo = groupedByTipo[tipo];
+            const spouseMap = getSpouseMap();
+
+            // Check if there's at least one active group across all sorteos of this tipo
+            const hasActiveGroups = sorteosDeTipo.some(data => data.grupos.some(g => !g.presentado));
+            if (!hasActiveGroups) return;
+
+            // Determine color for tipo
+            let tipoBg = "white";
+            let tipoLabelColor = "var(--primary)";
+            if (tipo === "Salmos") { tipoBg = "#f4e73d14"; }
+            else if (tipo === "Temas") { tipoBg = "#3b82f614"; }
+            else if (tipo === "Articulo") { tipoBg = "#f43d3d14"; }
+
+            // Create section wrapper
+            const section = document.createElement("div");
+            section.className = "card";
+            section.style.cssText = "margin-bottom: 24px; padding: 20px;";
+
+            const tipoLabel = tipo === "Articulo" ? "Artículos (Traditio)" : tipo === "Temas" ? "Temas con Fechas" : tipo === "Salmos" ? "Salmos (Traditio Symboli)" : tipo;
+
+            // Build "Guardar Fechas" buttons for each sorteo document
+            const saveButtons = sorteosDeTipo.map(data =>
+                `<button class="btn btn-sm btn-primary btn-update-history-dates" data-sorteo-id="${data.id}" style="padding:6px 12px; font-size:0.8rem;">💾 Guardar Fechas</button>`
+            ).join("");
+
+            // Use most recent date
+            const latestDate = sorteosDeTipo[0].fechaSorteo;
+            const dateStr = latestDate ? new Date(latestDate).toLocaleString() : "";
+
+            const headerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:10px; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                    <strong style="color:${tipoLabelColor}; font-size:1.05rem;">🎯 Sorteo ${tipoLabel}</strong>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span style="font-size:0.8rem; color:#64748b;">${dateStr}</span>
+                        ${saveButtons}
                     </div>
-                `;
+                </div>
+            `;
+
+            const gridDiv = document.createElement("div");
+            gridDiv.className = "carSort";
+
+            sorteosDeTipo.forEach(data => {
+                data.grupos.forEach((g, gIdx) => {
+                    if (g.presentado) return;
+
+                    const groupCouples = getGroupCouples(g, spouseMap);
+                    const memberCoupleIdx = {};
+                    groupCouples.forEach((couple, cIdx) => {
+                        couple.forEach(id => { memberCoupleIdx[id] = cIdx; });
+                    });
+
+                    let membersHTML = '';
+                    g.cabezasNames?.forEach((hName, hIdx) => {
+                        const hId = g.cabezasIds ? g.cabezasIds[hIdx] : "";
+                        const coupleIdx = memberCoupleIdx[hId];
+                        const badgeData = getMemberBadgeAndStyle(hId, hName, true, coupleIdx);
+                        membersHTML += `
+                            <div class="sorteo-member-item clickable-encuesta-member hist-clickable-encuesta" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${hId}" data-member-name="${hName}" style="${badgeData.style} cursor:pointer;" title="Ver grupo de encuesta de ${hName}">
+                                <span>👤 <strong>${hName}</strong></span>
+                                ${badgeData.badgeHTML}
+                            </div>
+                        `;
+                    });
+                    g.integrantesNames?.forEach((mName, mIdx) => {
+                        const mId = g.integrantesIds ? g.integrantesIds[mIdx] : "";
+                        const cleanName = mName.replace(" (Cónyuge)", "");
+                        const coupleIdx = memberCoupleIdx[mId];
+                        const badgeData = getMemberBadgeAndStyle(mId, cleanName, false, coupleIdx);
+                        membersHTML += `
+                            <div class="sorteo-member-item clickable-encuesta-member hist-clickable-encuesta" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${mId}" data-member-name="${cleanName}" style="${badgeData.style} cursor:pointer;" title="Ver grupo de encuesta de ${cleanName}">
+                                <span>👤 ${cleanName}</span>
+                                ${badgeData.badgeHTML}
+                            </div>
+                        `;
+                    });
+
+                    let dropdownOptions = '';
+                    data.grupos.forEach((otherG, otherIdx) => {
+                        const isSelected = otherIdx === gIdx ? 'selected' : '';
+                        const headName = otherG.cabezasNames && otherG.cabezasNames[0] ? otherG.cabezasNames[0] : `Grupo ${otherIdx + 1}`;
+                        dropdownOptions += `<option value="${otherIdx}" ${isSelected}>${headName}</option>`;
+                    });
+
+                    let footerHTML = '';
+                    if (g.fechaPresentacion !== undefined) {
+                        footerHTML = `
+                            <div style="margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9; font-size:0.85rem; color:#475569; display:flex; flex-direction:column; gap:8px;">
+                                ${g.temaNombre ? `<div>📚 <strong>Tema:</strong> ${g.temaNombre}</div>` : ''}
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span>📅 <strong>Fecha:</strong></span>
+                                    <input type="date" class="hist-group-date-input" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" value="${g.fechaPresentacion}" style="padding:3px 6px; font-size:0.8rem; border-radius:4px; border:1px solid #ccc; width:130px; font-family:sans-serif;" ${canCambiarFecha ? "" : "disabled"}>
+                                </div>
+                                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                    <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--success); font-size:0.85rem;">
+                                        <input type="checkbox" class="hist-group-presented-chk" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" style="width:16px; height:16px; margin:0;" ${canActivarPresentado ? "" : "disabled"}>
+                                        <span>Presentado</span>
+                                    </label>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    const hasDeleteSorteo = !window.hasPermission || window.hasPermission("sortear_eliminar");
+                    const deleteSorteoBtn = hasDeleteSorteo ? `<span class="delete-sorteo-btn" data-sorteo-id="${data.id}" style="color:#ef4444; font-weight:bold; cursor:pointer; margin-right:8px; font-family:sans-serif; font-size:1.1rem; vertical-align:middle;" title="Eliminar todo este sorteo">x</span>` : '';
+
+                    const gCard = document.createElement("div");
+                    gCard.className = "sorteo-group-card";
+                    gCard.style.margin = "0";
+                    gCard.style.backgroundColor = tipoBg;
+
+                    gCard.innerHTML = `
+                        <div class="sorteo-group-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <div style="display:flex; align-items:center; gap:4px; max-width:70%;">
+                                ${deleteSorteoBtn}
+                                <select class="hist-swap-group-head-select" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" style="font-size:1rem; font-weight:bold; color:var(--primary); border:none; background:transparent; padding:0; margin:0; cursor:pointer; width:100%; outline:none; -webkit-appearance:none; -moz-appearance:none; appearance:none; font-family:inherit;">
+                                    ${dropdownOptions}
+                                </select>
+                            </div>
+                            <span style="font-size:0.85rem; color:#64748b; white-space:nowrap;">(${g.cabezasIds.length + g.integrantesIds.length} pers.)</span>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            ${membersHTML}
+                        </div>
+                        ${footerHTML}
+                    `;
+                    gridDiv.appendChild(gCard);
+                });
             });
 
-            card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:6px; margin-bottom:6px;">
-                    <strong style="color:#1e293b;">🎯 Sorteo ${data.tipo} (${data.etapa})</strong>
-                    <span style="font-size:0.75rem; color:#64748b;">${new Date(data.fechaSorteo).toLocaleString()}</span>
-                </div>
-                ${gruposSummary}
-            `;
-            historialListaContainer.appendChild(card);
+            section.innerHTML = headerHTML;
+            section.appendChild(gridDiv);
+            historialListaContainer.appendChild(section);
+
+            // Bind date change listeners
+            section.querySelectorAll(".hist-group-date-input").forEach(input => {
+                input.addEventListener("change", (e) => {
+                    const sId = input.getAttribute("data-sorteo-id");
+                    const gIdx = parseInt(input.getAttribute("data-group-idx"));
+                    const data = savedSorteos.find(s => s.id === sId);
+                    if (data && data.grupos[gIdx]) {
+                        data.grupos[gIdx].fechaPresentacion = e.target.value;
+                        if (data.grupos[gIdx].encuestas) {
+                            Object.keys(data.grupos[gIdx].encuestas).forEach(key => {
+                                data.grupos[gIdx].encuestas[key].fechaPresentacion = e.target.value;
+                            });
+                        }
+                    }
+                });
+            });
+
+            // Bind presented checkboxes
+            section.querySelectorAll(".hist-group-presented-chk").forEach(chk => {
+                chk.addEventListener("change", async (e) => {
+                    if (window.hasPermission && !window.hasPermission("sortear_activar_presentado")) {
+                        alert("No tiene permiso para marcar temas como presentados.");
+                        chk.checked = false;
+                        return;
+                    }
+                    const isChecked = e.target.checked;
+                    const sId = chk.getAttribute("data-sorteo-id");
+                    const gIdx = parseInt(chk.getAttribute("data-group-idx"));
+                    const data = savedSorteos.find(s => s.id === sId);
+                    if (!data) return;
+                    try {
+                        data.grupos[gIdx].presentado = isChecked;
+                        const sorteoRef = doc(db, "sorteos", sId);
+                        await updateDoc(sorteoRef, { grupos: data.grupos });
+                        window.showAlert(isChecked ? "✅ Tema marcado como presentado." : "🔄 Tema devuelto al historial.", "success");
+                        await loadHistorialSorteos();
+                        await loadPresentados();
+                    } catch(err) {
+                        console.error("Error updating presented state:", err);
+                        window.showAlert("❌ Error al actualizar el estado: " + err.message, "error");
+                        chk.checked = !isChecked;
+                    }
+                });
+            });
+
+            // Bind save dates buttons
+            section.querySelectorAll(".btn-update-history-dates").forEach(btnUpdate => {
+                btnUpdate.addEventListener("click", async () => {
+                    if (window.hasPermission && !window.hasPermission("sortear_cambiar_fecha")) {
+                        alert("No tiene permiso para actualizar las fechas de los sorteos.");
+                        return;
+                    }
+                    btnUpdate.disabled = true;
+                    const sId = btnUpdate.getAttribute("data-sorteo-id");
+                    const data = savedSorteos.find(s => s.id === sId);
+                    if (!data) { btnUpdate.disabled = false; return; }
+                    try {
+                        const sorteoRef = doc(db, "sorteos", sId);
+                        await updateDoc(sorteoRef, { grupos: data.grupos });
+                        alert("✅ Fechas del sorteo actualizadas correctamente.");
+                    } catch(e) {
+                        console.error("Error updating history dates:", e);
+                        alert("❌ Error al guardar las fechas: " + e.message);
+                    } finally {
+                        btnUpdate.disabled = false;
+                    }
+                });
+            });
+
+            // Bind delete buttons
+            section.querySelectorAll(".delete-sorteo-btn").forEach(btn => {
+                btn.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    const sId = btn.getAttribute("data-sorteo-id");
+                    const confirmed = await window.showCustomConfirm("¿Está seguro de que desea eliminar este sorteo por completo del historial? Esta acción no se puede deshacer.");
+                    if (!confirmed) return;
+                    try {
+                        await deleteDoc(doc(db, "sorteos", sId));
+                        window.showAlert("🎉 Sorteo eliminado correctamente.", "success");
+                        await loadHistorialSorteos();
+                        await loadPresentados();
+                    } catch(err) {
+                        console.error("Error deleting drawing:", err);
+                        window.showAlert("❌ Error al eliminar el sorteo: " + err.message, "error");
+                    }
+                });
+            });
+
+            // Bind swap head selects
+            section.querySelectorAll(".hist-swap-group-head-select").forEach(select => {
+                select.addEventListener("change", async (e) => {
+                    if (window.hasPermission && !window.hasPermission("sortear_guardar")) {
+                        alert("No tiene permiso para modificar el estado de los sorteos.");
+                        select.value = select.getAttribute("data-group-idx");
+                        return;
+                    }
+                    const sId = select.getAttribute("data-sorteo-id");
+                    const fromIdx = parseInt(select.getAttribute("data-group-idx"));
+                    const toIdx = parseInt(e.target.value);
+                    if (fromIdx === toIdx) return;
+                    const data = savedSorteos.find(s => s.id === sId);
+                    if (!data) return;
+                    const g1 = data.grupos[fromIdx];
+                    const g2 = data.grupos[toIdx];
+
+                    [g1.cabezasIds, g2.cabezasIds] = [g2.cabezasIds, g1.cabezasIds];
+                    [g1.cabezasNames, g2.cabezasNames] = [g2.cabezasNames, g1.cabezasNames];
+                    [g1.integrantesIds, g2.integrantesIds] = [g2.integrantesIds, g1.integrantesIds];
+                    [g1.integrantesNames, g2.integrantesNames] = [g2.integrantesNames, g1.integrantesNames];
+                    [g1.nombreGrupo, g2.nombreGrupo] = [g2.nombreGrupo, g1.nombreGrupo];
+                    const tmpEnc = g1.encuestas || null;
+                    g1.encuestas = g2.encuestas || null;
+                    g2.encuestas = tmpEnc;
+
+                    try {
+                        const sorteoRef = doc(db, "sorteos", sId);
+                        await updateDoc(sorteoRef, { grupos: data.grupos });
+                        window.showAlert("✅ Grupos intercambiados correctamente.", "success");
+                        await loadHistorialSorteos();
+                        await loadPresentados();
+                    } catch(err) {
+                        console.error("Error swapping history group heads:", err);
+                        window.showAlert("❌ Error al intercambiar: " + err.message, "error");
+                        await loadHistorialSorteos();
+                    }
+                });
+            });
         });
 
         // Add click listener for historial encuestas
         document.querySelectorAll(".hist-clickable-encuesta").forEach(el => {
+            const originalBg = el.style.backgroundColor || "transparent";
+            el.addEventListener("mouseenter", () => {
+                el.style.backgroundColor = "#f1f5f9";
+            });
+            el.addEventListener("mouseleave", () => {
+                el.style.backgroundColor = originalBg;
+            });
             el.addEventListener("click", (e) => {
                 e.stopPropagation();
                 const sId = el.getAttribute("data-sorteo-id");
@@ -1040,6 +1722,11 @@ async function loadHistorialSorteos() {
                 }
             });
         });
+
+        // Repopulate temas dropdown to filter out used themes
+        if (selectedComunidadId) {
+            populateTemasDropdown(selectTipoSorteo.value === "Articulo" ? "Traditio Symboli" : null);
+        }
     } catch(err) {
         console.error("Error loading history:", err);
         historialListaContainer.innerHTML = '<span style="font-size:0.88rem; color:#ef4444;">Error al cargar el historial.</span>';
@@ -1073,17 +1760,26 @@ async function loadTemas() {
         allTemas.forEach(t => {
             const tr = document.createElement("tr");
             const labelNombre = t.orden !== undefined && t.orden !== null ? `${t.orden}. ${t.nombre}` : t.nombre;
+            
+            const hasEdit = !window.hasPermission || window.hasPermission("sortear_temas_editar");
+            const hasDelete = !window.hasPermission || window.hasPermission("sortear_temas_eliminar");
+
+            const editBtn = hasEdit ? `<button class="btn-edit-tema" data-id="${t.id}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:600; font-size:0.8rem; margin-right:8px;">Editar</button>` : '';
+            const deleteBtn = hasDelete ? `<button class="btn-delete-tema" data-id="${t.id}" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:600; font-size:0.8rem;">Eliminar</button>` : '';
+            const noActions = !hasEdit && !hasDelete ? '<span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Sin permisos</span>' : '';
+
             tr.innerHTML = `
                 <td style="padding:8px; font-size:0.85rem; color:#1e293b; font-weight:600;">${labelNombre}</td>
                 <td style="padding:8px; font-size:0.82rem; color:#64748b;">${t.etapa}</td>
                 <td style="padding:8px; text-align:center;">
-                    <button class="btn-edit-tema" data-id="${t.id}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:600; font-size:0.8rem; margin-right:8px;">Editar</button>
-                    <button class="btn-delete-tema" data-id="${t.id}" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:600; font-size:0.8rem;">Eliminar</button>
+                    ${editBtn}
+                    ${deleteBtn}
+                    ${noActions}
                 </td>
             `;
 
-            tr.querySelector(".btn-edit-tema").addEventListener("click", () => startEditTema(t));
-            tr.querySelector(".btn-delete-tema").addEventListener("click", () => deleteTema(t.id));
+            if (hasEdit) tr.querySelector(".btn-edit-tema").addEventListener("click", () => startEditTema(t));
+            if (hasDelete) tr.querySelector(".btn-delete-tema").addEventListener("click", () => deleteTema(t.id));
 
             temasTbody.appendChild(tr);
         });
@@ -1103,6 +1799,18 @@ async function saveTema(e) {
     const etapa = selectTemaEtapa.value;
 
     if (!nombre || !etapa) return;
+
+    if (editingTemaId) {
+        if (!window.hasPermission("sortear_temas_editar")) {
+            alert("No tiene permiso para editar temas.");
+            return;
+        }
+    } else {
+        if (!window.hasPermission("sortear_temas_crear")) {
+            alert("No tiene permiso para crear nuevos temas.");
+            return;
+        }
+    }
 
     btnSaveTema.disabled = true;
     try {
@@ -1124,6 +1832,10 @@ async function saveTema(e) {
 }
 
 function startEditTema(t) {
+    if (!window.hasPermission("sortear_temas_editar")) {
+        alert("No tiene permiso para editar temas.");
+        return;
+    }
     editingTemaId = t.id;
     inputTemaNombre.value = t.nombre;
     selectTemaEtapa.value = t.etapa;
@@ -1141,7 +1853,12 @@ function resetTemaForm() {
 }
 
 async function deleteTema(id) {
-    if (!confirm("¿Está seguro de que desea eliminar este tema?")) return;
+    if (!window.hasPermission("sortear_temas_eliminar")) {
+        alert("No tiene permiso para eliminar temas.");
+        return;
+    }
+    const confirmed = await window.showCustomConfirm("¿Está seguro de que desea eliminar este tema?");
+    if (!confirmed) return;
     try {
         await deleteDoc(doc(db, "temas", id));
         await loadTemas();
@@ -1158,4 +1875,549 @@ function formatPhoneString(phone) {
         return `(${clean.slice(0, 3)}) ${clean.slice(3, 6)}-${clean.slice(6)}`;
     }
     return phone;
+}
+
+function enforcePermissions() {
+    if (!window.hasPermission) return;
+
+    // Seleccionar Parroquia
+    if (!window.hasPermission("sortear_seleccionar_parroquia")) {
+        selectParroquia.disabled = true;
+    } else {
+        selectParroquia.disabled = false;
+    }
+
+    // Seleccionar Comunidad
+    if (!window.hasPermission("sortear_seleccionar_comunidad")) {
+        selectComunidad.disabled = true;
+    } else {
+        // Only enable if parroquia is selected
+        selectComunidad.disabled = !selectedParroquiaId;
+    }
+
+    // Ejecutar Sorteo
+    const canEjecutar = window.hasPermission("sortear_sortear") || window.hasPermission("sortear_ejecutar");
+    if (!canEjecutar) {
+        btnEjecutarSorteo.disabled = true;
+        btnEjecutarSorteo.style.opacity = "0.5";
+        btnEjecutarSorteo.style.cursor = "not-allowed";
+        btnEjecutarSorteo.title = "No tiene permiso para ejecutar sorteos";
+    } else {
+        btnEjecutarSorteo.disabled = false;
+        btnEjecutarSorteo.style.opacity = "1";
+        btnEjecutarSorteo.style.cursor = "pointer";
+        btnEjecutarSorteo.title = "";
+    }
+
+    // Guardar Resultados
+    const canGuardar = window.hasPermission("sortear_sortear") || window.hasPermission("sortear_guardar");
+    if (!canGuardar) {
+        btnGuardarSorteo.style.display = "none";
+    } else {
+        btnGuardarSorteo.style.display = "inline-block";
+    }
+
+    // Crear/Guardar Temas
+    const formCard = document.getElementById("tema-form")?.closest(".card");
+    if (formCard) {
+        if (!window.hasPermission("sortear_temas_crear") && !window.hasPermission("sortear_temas_editar") && !window.hasPermission("sortear_banco_temas")) {
+            formCard.style.display = "none";
+        } else {
+            formCard.style.display = "block";
+        }
+    }
+
+    // Enforce Tab Visibility
+    const tabHistorial = document.querySelector('.tab-btn[data-tab="tab-historial"]');
+    if (tabHistorial) {
+        tabHistorial.style.display = window.hasPermission("sortear_ver_sorteados") ? "inline-block" : "none";
+    }
+
+    const tabAsistente = document.querySelector('.tab-btn[data-tab="tab-asistente"]');
+    if (tabAsistente) {
+        tabAsistente.style.display = (window.hasPermission("sortear_sortear") || window.hasPermission("sortear_ejecutar")) ? "inline-block" : "none";
+    }
+
+    const tabExternos = document.querySelector('.tab-btn[data-tab="tab-externos"]');
+    if (tabExternos) {
+        tabExternos.style.display = window.hasPermission("sortear_externos") ? "inline-block" : "none";
+    }
+
+    const tabPresentados = document.querySelector('.tab-btn[data-tab="tab-presentados"]');
+    if (tabPresentados) {
+        tabPresentados.style.display = window.hasPermission("sortear_presentados") ? "inline-block" : "none";
+    }
+
+    const tabTemas = document.querySelector('.tab-btn[data-tab="tab-temas"]');
+    if (tabTemas) {
+        tabTemas.style.display = window.hasPermission("sortear_banco_temas") ? "inline-block" : "none";
+    }
+
+    // If active tab is hidden, switch to the first visible tab
+    const activeTabBtn = document.querySelector('.tab-btn.active');
+    if (activeTabBtn && activeTabBtn.style.display === "none") {
+        const firstVisibleTabBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.style.display !== "none");
+        if (firstVisibleTabBtn) {
+            firstVisibleTabBtn.click();
+        }
+    }
+}
+
+async function loadPresentados() {
+    const canDevolver = !window.hasPermission || window.hasPermission("sortear_devolver");
+    presentadosListaContainer.innerHTML = '';
+
+    if (!selectedComunidadId) return;
+
+    try {
+        const q = query(
+            collection(db, "sorteos"), 
+            where("comunidadId", "==", selectedComunidadId)
+        );
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+            presentadosListaContainer.innerHTML = '<span style="font-size:0.88rem; color:#64748b; font-style:italic;">No hay temas presentados registrados para esta comunidad.</span>';
+            return;
+        }
+
+        const rawList = [];
+        snap.forEach(d => {
+            rawList.push({ id: d.id, ...d.data() });
+        });
+
+        // Sort in memory desc
+        rawList.sort((a, b) => {
+            const dateA = a.fechaSorteo || "";
+            const dateB = b.fechaSorteo || "";
+            return dateB.localeCompare(dateA);
+        });
+
+        let totalPresentedGroups = 0;
+
+        rawList.forEach(data => {
+            const presentedGroups = data.grupos.filter(g => g.presentado);
+            if (presentedGroups.length === 0) return;
+
+            totalPresentedGroups += presentedGroups.length;
+
+            const spouseMap = getSpouseMap();
+
+            data.grupos.forEach((g, gIdx) => {
+                if (!g.presentado) return;
+
+                const isTraditio = data.tipo === "Articulo" || !!g.encuestas;
+                const groupCouples = getGroupCouples(g, spouseMap);
+                const memberCoupleIdx = {};
+                groupCouples.forEach((couple, cIdx) => {
+                    couple.forEach(id => {
+                        memberCoupleIdx[id] = cIdx;
+                    });
+                });
+
+                let membersHTML = '';
+
+                // Heads
+                g.cabezasNames?.forEach((hName, hIdx) => {
+                    const hId = g.cabezasIds ? g.cabezasIds[hIdx] : "";
+                    const coupleIdx = memberCoupleIdx[hId];
+                    const badgeData = getMemberBadgeAndStyle(hId, hName, true, coupleIdx);
+                    membersHTML += `
+                        <div class="sorteo-member-item clickable-encuesta-member hist-clickable-encuesta" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${hId}" data-member-name="${hName}" style="${badgeData.style} cursor:pointer;" title="Ver grupo de encuesta de ${hName}">
+                            <span>👤 <strong>${hName}</strong></span>
+                            ${badgeData.badgeHTML}
+                        </div>
+                    `;
+                });
+
+                // Members
+                g.integrantesNames?.forEach((mName, mIdx) => {
+                    const mId = g.integrantesIds ? g.integrantesIds[mIdx] : "";
+                    const cleanName = mName.replace(" (Cónyuge)", "");
+                    const coupleIdx = memberCoupleIdx[mId];
+                    const badgeData = getMemberBadgeAndStyle(mId, cleanName, false, coupleIdx);
+                    membersHTML += `
+                        <div class="sorteo-member-item clickable-encuesta-member hist-clickable-encuesta" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${mId}" data-member-name="${cleanName}" style="${badgeData.style} cursor:pointer;" title="Ver grupo de encuesta de ${cleanName}">
+                            <span>👤 ${cleanName}</span>
+                            ${badgeData.badgeHTML}
+                        </div>
+                    `;
+                });
+
+                const formattedDate = g.fechaPresentacion ? g.fechaPresentacion.split("-").reverse().join("/") : "";
+
+                let dropdownOptions = '';
+                data.grupos.forEach((otherG, otherIdx) => {
+                    const isSelected = otherIdx === gIdx ? 'selected' : '';
+                    const headName = otherG.cabezasNames && otherG.cabezasNames[0] ? otherG.cabezasNames[0] : `Grupo ${otherIdx + 1}`;
+                    dropdownOptions += `<option value="${otherIdx}" ${isSelected}>${headName}</option>`;
+                });
+
+                // One card per group — goes directly into the CSS grid
+                const card = document.createElement("div");
+                card.className = "card";
+                
+                let cardBg = "white";
+                if (data.tipo === "Salmos") {
+                    cardBg = "#f4e73d14";
+                } else if (data.tipo === "Temas") {
+                    cardBg = "#3b82f614";
+                } else if (data.tipo === "Articulo") {
+                    cardBg = "#f43d3d14";
+                }
+                card.style.cssText = `padding:16px; background:${cardBg}; border:1px solid #e2e8f0; border-radius:8px; margin:0; height: -webkit-fill-available;`;
+
+                card.innerHTML = `
+                    <!-- Sorteo header -->
+                    <div style="border-bottom:1px solid #e2e8f0; padding-bottom:8px; margin-bottom:12px;">
+                        <div style="font-weight:600; color:var(--primary); font-size:0.95rem;">🎯 Sorteo ${data.tipo} (${data.etapa})</div>
+                        <div style="font-size:0.78rem; color:#64748b;">${new Date(data.fechaSorteo).toLocaleString()}</div>
+                    </div>
+                    <!-- Group header -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="display:flex; align-items:center; gap:4px; max-width:70%;">
+                            <select class="hist-swap-group-head-select" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" style="font-size:1rem; font-weight:bold; color:var(--primary); border:none; background:transparent; padding:0; margin:0; cursor:pointer; width:100%; outline:none; -webkit-appearance:none; -moz-appearance:none; appearance:none; font-family:inherit;">
+                                ${dropdownOptions}
+                            </select>
+                        </div>
+                        <span style="font-size:0.85rem; color:#64748b; white-space:nowrap;">(${g.cabezasIds.length + g.integrantesIds.length} pers.)</span>
+                    </div>
+                    <!-- Members -->
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        ${membersHTML}
+                    </div>
+                    <!-- Footer -->
+                    <div style="margin-top:10px; padding-top:8px; border-top:1px solid #f1f5f9; font-size:0.85rem; color:#475569;">
+                        ${g.temaNombre ? `<div style="margin-bottom:5px;">📚 <strong>Tema:</strong> ${g.temaNombre}</div>` : ''}
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                            <span>📅 <strong>Fecha:</strong> ${formattedDate}</span>
+                            <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-weight:600; color:#ef4444; font-size:0.82rem;">
+                                <input type="checkbox" class="hist-group-unpresent-chk" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" checked style="width:16px; height:16px;" ${canDevolver ? "" : "disabled"}>
+                                <span>Devolver</span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+
+                presentadosListaContainer.appendChild(card);
+
+            }); // end data.grupos.forEach
+
+        }); // end rawList.forEach
+
+        if (totalPresentedGroups === 0) {
+            presentadosListaContainer.innerHTML = '<span style="font-size:0.88rem; color:#64748b; font-style:italic;">No hay temas presentados registrados para esta comunidad.</span>';
+        }
+
+        // ── Event listeners (attached once after all cards rendered) ──
+
+        // Devolver (unpresent) checkbox
+        presentadosListaContainer.querySelectorAll(".hist-group-unpresent-chk").forEach(chk => {
+            chk.addEventListener("change", async (e) => {
+                if (window.hasPermission && !window.hasPermission("sortear_devolver")) {
+                    alert("No tiene permiso para modificar el estado de los sorteos.");
+                    chk.checked = true;
+                    return;
+                }
+                const sId = chk.getAttribute("data-sorteo-id");
+                const gIdx = parseInt(chk.getAttribute("data-group-idx"));
+                const sorteoData = rawList.find(d => d.id === sId);
+                if (!sorteoData) return;
+                try {
+                    sorteoData.grupos[gIdx].presentado = false;
+                    const sorteoRef = doc(db, "sorteos", sId);
+                    await updateDoc(sorteoRef, { grupos: sorteoData.grupos });
+                    window.showAlert("🔄 Tema devuelto al historial de sorteos.", "success");
+                    await loadHistorialSorteos();
+                    await loadPresentados();
+                } catch(err) {
+                    console.error("Error reverting presented state:", err);
+                    window.showAlert("❌ Error: " + err.message, "error");
+                    chk.checked = true;
+                }
+            });
+        });
+
+        // Intercambio de grupo (select cabeza)
+        presentadosListaContainer.querySelectorAll(".hist-swap-group-head-select").forEach(select => {
+            select.addEventListener("change", async (e) => {
+                if (window.hasPermission && !window.hasPermission("sortear_guardar")) {
+                    alert("No tiene permiso para modificar el estado de los sorteos.");
+                    select.value = select.getAttribute("data-group-idx");
+                    return;
+                }
+                const sId = select.getAttribute("data-sorteo-id");
+                const fromIdx = parseInt(select.getAttribute("data-group-idx"));
+                const toIdx = parseInt(e.target.value);
+                if (fromIdx === toIdx) return;
+                const sorteoData = rawList.find(d => d.id === sId);
+                if (!sorteoData) return;
+
+                const g1 = sorteoData.grupos[fromIdx];
+                const g2 = sorteoData.grupos[toIdx];
+
+                const tempCabezasIds = g1.cabezasIds; const tempCabezasNames = g1.cabezasNames;
+                g1.cabezasIds = g2.cabezasIds; g1.cabezasNames = g2.cabezasNames;
+                g2.cabezasIds = tempCabezasIds; g2.cabezasNames = tempCabezasNames;
+
+                const tempIntegrantesIds = g1.integrantesIds; const tempIntegrantesNames = g1.integrantesNames;
+                g1.integrantesIds = g2.integrantesIds; g1.integrantesNames = g2.integrantesNames;
+                g2.integrantesIds = tempIntegrantesIds; g2.integrantesNames = tempIntegrantesNames;
+
+                const tempNombreGrupo = g1.nombreGrupo;
+                g1.nombreGrupo = g2.nombreGrupo; g2.nombreGrupo = tempNombreGrupo;
+
+                const tempEncuestas = g1.encuestas || null;
+                g1.encuestas = g2.encuestas || null; g2.encuestas = tempEncuestas;
+
+                try {
+                    await updateDoc(doc(db, "sorteos", sId), { grupos: sorteoData.grupos });
+                    window.showAlert("✅ Grupos intercambiados correctamente.", "success");
+                    await loadHistorialSorteos();
+                    await loadPresentados();
+                } catch(err) {
+                    console.error("Error swapping presentados group heads:", err);
+                    window.showAlert("❌ Error al intercambiar: " + err.message, "error");
+                    await loadPresentados();
+                }
+            });
+        });
+
+
+
+        // Add click listener for historial encuestas
+        document.querySelectorAll(".hist-clickable-encuesta").forEach(el => {
+            const originalBg = el.style.backgroundColor || "transparent";
+            el.addEventListener("mouseenter", () => {
+                el.style.backgroundColor = "#f1f5f9";
+            });
+            el.addEventListener("mouseleave", () => {
+                el.style.backgroundColor = originalBg;
+            });
+            el.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const sId = el.getAttribute("data-sorteo-id");
+                const gIdx = parseInt(el.getAttribute("data-group-idx"));
+                const mId = el.getAttribute("data-member-id");
+                const mName = el.getAttribute("data-member-name");
+                const s = savedSorteos.find(item => item.id === sId);
+                if (s && s.grupos && s.grupos[gIdx]) {
+                    openEncuestaModal(s.grupos[gIdx], mId, mName);
+                }
+            });
+        });
+
+    } catch(err) {
+        console.error("Error loading presentados:", err);
+        presentadosListaContainer.innerHTML = '<span style="font-size:0.88rem; color:#ef4444;">Error al cargar temas presentados.</span>';
+    }
+}
+
+let externoGroupCounter = 0;
+
+function addExternoGroupCard() {
+    const container = document.getElementById("externo-grupos-list-container");
+    const gIdx = externoGroupCounter++;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = `externo-group-card-${gIdx}`;
+    card.style.cssText = "padding: 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; position: relative; margin-bottom: 12px;";
+
+    // Cabeza Options
+    let cabezaOptions = '<option value="">— Seleccionar Cabeza —</option>';
+    allHermanos.forEach(h => {
+        cabezaOptions += `<option value="${h.id}">${h.name}</option>`;
+    });
+
+    // Tema Options
+    let temaOptions = '<option value="">— Seleccionar Tema —</option>';
+    const extTipoSelect = document.getElementById("externo-tipo-sorteo");
+    const extTipo = extTipoSelect ? extTipoSelect.value : "Temas";
+
+    if (extTipo === "Temas" || extTipo === "Articulo") {
+        const sourceArray = extTipo === "Temas" ? catalogTemas : allTemas;
+        const targetStage = extTipo === "Articulo" ? "Traditio Symboli" : selectedComunidadEtapa;
+        const stageThemes = sourceArray.filter(t => t.etapa && t.etapa.toLowerCase() === targetStage.toLowerCase());
+        stageThemes.sort((a, b) => {
+            const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
+            const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;
+            return ordA - ordB;
+        });
+        stageThemes.forEach(t => {
+            const label = t.orden !== undefined && t.orden !== null ? `${t.orden}. ${t.nombre}` : t.nombre;
+            temaOptions += `<option value="${t.id}" data-name="${t.nombre}">${label}</option>`;
+        });
+    } else if (extTipo === "Salmos") {
+        for (let i = 1; i <= 150; i++) {
+            temaOptions += `<option value="salmo_${i}" data-name="Salmo ${i}">Salmo ${i}</option>`;
+        }
+    }
+
+    const showTemaField = (extTipo !== "Simple" && extTipo !== "Eucaristia");
+    const temaColStyle = showTemaField ? "" : "display: none;";
+
+    // Integrantes Checklist HTML
+    let integrantesChecklist = '';
+    allHermanos.forEach(h => {
+        integrantesChecklist += `
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:#334155; cursor:pointer;">
+                <input type="checkbox" class="externo-member-chk" value="${h.id}" data-name="${h.name}">
+                <span>${h.name}</span>
+            </label>
+        `;
+    });
+
+    card.innerHTML = `
+        <button type="button" class="btn-remove-externo-group" data-gidx="${gIdx}" style="position:absolute; top:12px; right:12px; background:none; border:none; color:#ef4444; font-weight:bold; cursor:pointer; font-size:0.9rem;">✕ Quitar</button>
+        <div style="font-weight:bold; color:var(--primary); margin-bottom:12px; font-size:0.92rem;">Grupo #${container.children.length + 1}</div>
+        
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:12px;">
+            <div>
+                <label style="font-weight:600; color:#475569; font-size:0.8rem; display:block; margin-bottom:4px;">Cabeza del Grupo *</label>
+                <select class="externo-cabeza-select" required style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.82rem; background:white; height:32px;">
+                    ${cabezaOptions}
+                </select>
+            </div>
+            <div id="externo-tema-col-${gIdx}" style="${temaColStyle}">
+                <label style="font-weight:600; color:#475569; font-size:0.8rem; display:block; margin-bottom:4px;">Tema/Artículo</label>
+                <select class="externo-tema-select" style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.82rem; background:white; height:32px;">
+                    ${temaOptions}
+                </select>
+            </div>
+            <div>
+                <label style="font-weight:600; color:#475569; font-size:0.8rem; display:block; margin-bottom:4px;">Fecha de Presentación</label>
+                <input type="date" class="externo-fecha-pres" style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.82rem; height:32px; font-family:sans-serif;">
+            </div>
+            <div style="display:flex; align-items:center; padding-top:18px;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--success); font-size:0.82rem;">
+                    <input type="checkbox" class="externo-presentado-chk" style="width:16px; height:16px;">
+                    <span>Marcar como Presentado</span>
+                </label>
+            </div>
+        </div>
+
+        <div>
+            <label style="font-weight:600; color:#475569; font-size:0.8rem; display:block; margin-bottom:4px;">Integrantes del Grupo</label>
+            <div style="border:1px solid #ccc; border-radius:4px; background:white; padding:8px; max-height:max-content; overflow-y:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+                ${integrantesChecklist}
+            </div>
+        </div>
+    `;
+
+    container.appendChild(card);
+
+    // Remove group listener
+    card.querySelector(".btn-remove-externo-group").addEventListener("click", () => {
+        container.removeChild(card);
+        // Rename remaining headers
+        Array.from(container.children).forEach((child, index) => {
+            child.querySelector("div").textContent = `Grupo #${index + 1}`;
+        });
+    });
+}
+
+async function saveSorteoExterno(e) {
+    e.preventDefault();
+    if (window.hasPermission && !window.hasPermission("sortear_externos")) {
+        window.showAlert("No tiene permiso para registrar sorteos externos.", "error");
+        return;
+    }
+    if (!selectedComunidadId) {
+        window.showAlert("Por favor, seleccione una comunidad antes de registrar un sorteo.", "error");
+        return;
+    }
+
+    const type = document.getElementById("externo-tipo-sorteo").value;
+    const drawingDate = document.getElementById("externo-fecha-sorteo").value;
+
+    const groupCards = document.querySelectorAll("#externo-grupos-list-container > div");
+    if (groupCards.length === 0) {
+        window.showAlert("Por favor, añada al menos un grupo al sorteo.", "error");
+        return;
+    }
+
+    const grupos = [];
+    let isValid = true;
+
+    groupCards.forEach(card => {
+        const cabezaSelect = card.querySelector(".externo-cabeza-select");
+        const cabezaId = cabezaSelect.value;
+        const cabezaName = cabezaSelect.options[cabezaSelect.selectedIndex].text;
+
+        if (!cabezaId) {
+            isValid = false;
+            return;
+        }
+
+        const temaSelect = card.querySelector(".externo-tema-select");
+        const temaId = temaSelect.value || "";
+        const temaNombre = temaSelect.selectedIndex > 0 ? temaSelect.options[temaSelect.selectedIndex].getAttribute("data-name") : "";
+
+        const fechaPres = card.querySelector(".externo-fecha-pres").value || "";
+        const presentado = card.querySelector(".externo-presentado-chk").checked;
+
+        // Collect integrantes
+        const cabezasIds = [cabezaId];
+        const cabezasNames = [cabezaName];
+        const integrantesIds = [];
+        const integrantesNames = [];
+
+        card.querySelectorAll(".externo-member-chk:checked").forEach(chk => {
+            const mId = chk.value;
+            const mName = chk.getAttribute("data-name");
+            if (mId !== cabezaId) { // avoid duplicate head in members
+                integrantesIds.push(mId);
+                integrantesNames.push(mName);
+            }
+        });
+
+        grupos.push({
+            nombreGrupo: `Grupo de ${cabezaName}`,
+            cabezasIds,
+            cabezasNames,
+            integrantesIds,
+            integrantesNames,
+            temaId,
+            temaNombre,
+            fechaPresentacion: fechaPres,
+            presentado
+        });
+    });
+
+    if (!isValid) {
+        window.showAlert("Por favor, complete la cabeza de todos los grupos.", "error");
+        return;
+    }
+
+    const btnSubmit = document.getElementById("btn-save-externo");
+    btnSubmit.disabled = true;
+
+    try {
+        const sorteoData = {
+            comunidadId: selectedComunidadId,
+            parroquiaId: selectedParroquiaId,
+            tipo: type,
+            etapa: selectedComunidadEtapa,
+            fechaSorteo: drawingDate ? new Date(drawingDate).toISOString() : "",
+            grupos: grupos,
+            externo: true
+        };
+
+        await addDoc(collection(db, "sorteos"), sorteoData);
+        window.showAlert("✅ Sorteo manual/externo registrado con éxito.", "success");
+        
+        // Reset form
+        document.getElementById("form-sorteo-externo").reset();
+        document.getElementById("externo-grupos-list-container").innerHTML = '';
+        
+        // Reload history & presentados
+        await loadHistorialSorteos();
+        await loadPresentados();
+    } catch(err) {
+        console.error("Error saving external drawing:", err);
+        window.showAlert("❌ Error al guardar sorteo externo: " + err.message, "error");
+    } finally {
+        btnSubmit.disabled = false;
+    }
 }

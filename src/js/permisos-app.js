@@ -571,7 +571,23 @@ const PERMISSIONS_TREE = [
     id: "sortear",
     label: "Sortear",
     children: [
-      { id: "sortear_ver", label: "Ver / Listar" }
+      { id: "sortear_ver", label: "Ver / Listar Sorteos" },
+      { id: "sortear_ver_sorteados", label: "Ver sorteados" },
+      { id: "sortear_seleccionar_parroquia", label: "Seleccionar Parroquia en Sorteos" },
+      { id: "sortear_seleccionar_comunidad", label: "Seleccionar Comunidad en Sorteos" },
+      { id: "sortear_ejecutar", label: "Ejecutar Sorteos" },
+      { id: "sortear_sortear", label: "Sortear" },
+      { id: "sortear_guardar", label: "Guardar Resultados de Sorteo" },
+      { id: "sortear_cambiar_fecha", label: "Cambiar fecha" },
+      { id: "sortear_activar_presentado", label: "activar Presentado" },
+      { id: "sortear_externos", label: "Sorteos Externos" },
+      { id: "sortear_presentados", label: "Presentados" },
+      { id: "sortear_devolver", label: "Devolver" },
+      { id: "sortear_banco_temas", label: "Banco de Temas" },
+      { id: "sortear_eliminar", label: "Eliminar Sorteos del Historial" },
+      { id: "sortear_temas_crear", label: "Crear temas en Banco de Temas" },
+      { id: "sortear_temas_editar", label: "Editar temas en Banco de Temas" },
+      { id: "sortear_temas_eliminar", label: "Eliminar temas en Banco de Temas" }
     ]
   },
   {

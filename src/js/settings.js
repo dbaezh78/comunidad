@@ -4,6 +4,9 @@ import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy 
 // --- CSS para los Ajustes ---
 const styles = document.createElement("style");
 styles.textContent = `
+body {
+    font-family: sans-serif;
+}
 .settings-tabs-container {
     display: flex;
     gap: 2px;
@@ -173,11 +176,23 @@ function injectModal() {
                         <div class="settings-tab-pane" id="tab-tema">
                             <h4 style="margin-top:0;">Personalizar Tema</h4>
                             <p style="font-size:0.8rem; color:#666; margin-bottom:12px;">Selecciona el color del tema principal para la aplicación.</p>
-                            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;">
+                            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:15px;">
                                 <div class="theme-option" data-theme="original">🔵 Original (Azul)</div>
                                 <div class="theme-option" data-theme="dark">⚫ Oscuro</div>
                                 <div class="theme-option" data-theme="emerald">🟢 Esmeralda</div>
                             </div>
+                            
+                            <h4 style="margin-top:15px;">Tipografía (Fuente)</h4>
+                            <p style="font-size:0.8rem; color:#666; margin-bottom:8px;">Selecciona la fuente tipográfica para la aplicación.</p>
+                            <select id="sg-font-family" style="width:100%; padding:8px; border:2px solid var(--border); border-radius:5px; background:white; font-size:0.9rem;">
+                                <option value="sans-serif">Sans-Serif (Por defecto)</option>
+                                <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
+                                <option value="Arial, Helvetica, sans-serif">Arial</option>
+                                <option value="'Montserrat', sans-serif">Montserrat</option>
+                                <option value="'Roboto', sans-serif">Roboto</option>
+                                <option value="Georgia, 'Times New Roman', Times, serif">Serif (Georgia)</option>
+                                <option value="'Courier New', Courier, monospace">Monospace</option>
+                            </select>
                         </div>
 
                         <!-- Usuario -->
@@ -304,6 +319,19 @@ function setupModalInteractions() {
             addLog(`Cambió tema visual a: ${theme}`);
         });
     });
+
+    // Cargar y Aplicar Fuente Tipográfica
+    const fontSelect = document.getElementById("sg-font-family");
+    const currentFont = localStorage.getItem("selected-font") || "sans-serif";
+    if (fontSelect) {
+        fontSelect.value = currentFont;
+        fontSelect.addEventListener("change", () => {
+            const font = fontSelect.value;
+            document.body.style.fontFamily = font;
+            localStorage.setItem("selected-font", font);
+            addLog(`Cambió tipografía a: ${font}`);
+        });
+    }
 
     // Inicializar carismas
     document.getElementById("sg-add-carisma").addEventListener("click", saveCarisma);
@@ -507,4 +535,8 @@ window.addEventListener("app:ready", (e) => {
     // Aplicar tema por defecto al cargar página
     const savedTheme = localStorage.getItem("selected-theme") || "original";
     applyTheme(savedTheme);
+
+    // Aplicar fuente tipográfica por defecto al cargar página
+    const savedFont = localStorage.getItem("selected-font") || "sans-serif";
+    document.body.style.fontFamily = savedFont;
 });

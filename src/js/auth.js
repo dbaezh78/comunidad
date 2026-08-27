@@ -1628,3 +1628,83 @@ const printConfigs = {
         }
     }
 };
+
+window.showCustomConfirm = function(message = "La información que elimine no podrá ser recuperada.") {
+    return new Promise((resolve) => {
+        // Create modal overlay
+        const overlay = document.createElement("div");
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            font-family: sans-serif;
+        `;
+
+        // Create modal content container
+        const container = document.createElement("div");
+        container.style.cssText = `
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        `;
+
+        container.innerHTML = `
+            <img src="src/img/siren.png" alt="Alerta" style="width: 80px; height: auto; margin-bottom: 15px; display: inline-block;">
+            <h3 style="margin: 0 0 10px 0; font-size: 1.4rem; color: #1e293b; font-weight: 700;">¿Seguro que desea eliminar?</h3>
+            <p style="margin: 0 0 24px 0; font-size: 0.9rem; color: #64748b; line-height: 1.4;">${message}</p>
+            <div style="display: flex; justify-content: center; gap: 12px;">
+                <button id="custom-confirm-cancel" style="background: #cbd5e1; color: #475569; border: none; padding: 10px 20px; font-size: 0.95rem; font-weight: 600; border-radius: 6px; cursor: pointer; min-width: 110px;">Cancelar</button>
+                <button id="custom-confirm-yes" style="background: #d0003c; color: white; border: none; padding: 10px 20px; font-size: 0.95rem; font-weight: 600; border-radius: 6px; cursor: pointer; min-width: 110px;">Sí, eliminar!</button>
+            </div>
+        `;
+
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        // Cancel handler
+        overlay.querySelector("#custom-confirm-cancel").addEventListener("click", () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        });
+
+        // Yes handler
+        overlay.querySelector("#custom-confirm-yes").addEventListener("click", () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        });
+
+        // Click overlay background to cancel
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+                resolve(false);
+            }
+        });
+    });
+};
+
+window.showAlert = function(msg, type = "info") {
+    const globalAlert = document.getElementById("global-alert");
+    if (!globalAlert) {
+        // Fallback to basic alert if element does not exist
+        alert(msg);
+        return;
+    }
+    globalAlert.textContent = msg;
+    globalAlert.className = `alert alert-${type} visible`;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (type === "success") {
+        setTimeout(() => { globalAlert.className = "alert"; }, 3500);
+    }
+};

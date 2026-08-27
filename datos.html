@@ -77,11 +77,51 @@
     <div class="page-content">
 
         <!-- Selector de Catálogos -->
-        <div class="form-selector-container">
+        <div class="form-selector-container" style="display:flex; align-items:center; gap:10px; margin-bottom: 20px; flex-wrap: wrap;">
             <span style="font-weight:bold; font-family:'Segoe UI',sans-serif;">📂 Catálogo a gestionar:</span>
-            <select id="form-selector">
+            <select id="form-selector" style="padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.88rem; background:white; height:34px; min-width:180px;">
                 <option value="misiones">📋 Misiones</option>
             </select>
+            <div style="display:flex; gap:8px;">
+                <button id="btn-nuevo-catalogo" class="btn btn-sm btn-outline" style="padding:6px 12px; height:34px; font-weight:bold; cursor:pointer;">➕ Nuevo Catálogo</button>
+                <button id="btn-editar-catalogo" class="btn btn-sm btn-outline" style="padding:6px 12px; height:34px; font-weight:bold; cursor:pointer;">✏️ Editar Catálogo</button>
+            </div>
+        </div>
+
+        <!-- Formulario Catálogo (crear / editar) -->
+        <div id="form-card-catalogo" class="card" style="display:none; margin-bottom:20px;">
+            <div class="card-title" id="form-title-catalogo">📋 Catálogo</div>
+            <p style="font-size:0.82rem; color:#475569; background:#f8fafc; border-left:4px solid #3b82f6; padding:10px 12px; margin-top:-5px; margin-bottom:15px; border-radius: 0 4px 4px 0; line-height:1.4;">
+                <strong>💡 Nota:</strong> Al asociar este catálogo con una etapa del itinerario, los sorteos correspondientes a esa etapa jalarán automáticamente los temas y palabras aquí creados según la etapa de la comunidad.
+            </p>
+            <div class="catalogo-form-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                <div class="form-group" style="margin:0;">
+                    <label for="catalogo-nombre">Nombre del Catálogo *</label>
+                    <input type="text" id="catalogo-nombre" placeholder="Ej: Palabras Sueltas, Ministerios..." style="width:100%; box-sizing:border-box;">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="catalogo-etapa">Etapa / Paso de Formación *</label>
+                    <select id="catalogo-etapa" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc; font-size:0.88rem; background:white; height:38px; box-sizing:border-box;">
+                        <option value="">— Seleccionar Etapa —</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group full-width" style="margin-top: 10px;">
+                <label for="catalogo-detalle">Detalle o Descripción</label>
+                <textarea id="catalogo-detalle" rows="2" placeholder="Explique brevemente de qué trata este catálogo..." style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+            </div>
+            <style>
+                @media (max-width: 640px) {
+                    .catalogo-form-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+            </style>
+            <div class="btn-actions" style="margin-top:15px;">
+                <button id="btn-save-catalogo" class="btn btn-primary">💾 Guardar Catálogo</button>
+                <button id="btn-cancel-catalogo" class="btn btn-outline">Cancelar</button>
+                <button id="btn-delete-catalogo" class="btn btn-accent" style="display:none;">🗑️ Eliminar Catálogo</button>
+            </div>
         </div>
 
         <!-- Alerta global -->
@@ -89,26 +129,58 @@
 
         <!-- ── SECCIÓN: MISIONES ── -->
         <div id="section-misiones" class="data-section">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h2 class="page-title" style="margin:0;">📋 Misiones</h2>
-                <button id="btn-nueva-mision" class="btn btn-success">+ Nueva Misión</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                <h2 class="page-title" id="section-title" style="margin:0;">📋 Misiones</h2>
+                <div style="display:flex; gap:8px;">
+                    <button id="btn-nueva-mision" class="btn btn-success">+ Nuevo Registro</button>
+                    <button id="btn-importar-misiones" class="btn btn-outline">📥 Importar Listado</button>
+                </div>
+            </div>
+            <p id="section-desc" style="font-size:0.85rem; color:#64748b; margin-top:-10px; margin-bottom:15px; font-style:italic; display:none; line-height:1.4;"></p>
+
+            <!-- Formulario Importación Masiva -->
+            <div id="form-card-import" class="card" style="display:none; margin-bottom:20px;">
+                <div class="card-title">📥 Importar Listado de Elementos</div>
+                <p style="font-size:0.82rem; color:#475569; background:#f8fafc; border-left:4px solid #10b981; padding:10px 12px; margin-bottom:15px; border-radius: 0 4px 4px 0; line-height:1.4;">
+                    Pegue su lista de palabras o temas aquí. Ingrese <strong>un elemento por línea</strong>. El sistema calculará y asignará el número de orden secuencial de forma automática.
+                </p>
+                <div class="form-group full-width" style="margin-bottom:0;">
+                    <textarea id="import-textarea" rows="12" placeholder="Ej:&#10;Piedra&#10;Hombre&#10;Brazo, Derecha&#10;Fariseos..." style="width:100%; box-sizing:border-box; font-family:monospace; font-size:0.9rem; line-height:1.4; resize:vertical;"></textarea>
+                </div>
+                <div class="btn-actions" style="margin-top:15px;">
+                    <button id="btn-save-import" class="btn btn-primary">📥 Procesar Importación</button>
+                    <button id="btn-cancel-import" class="btn btn-outline">Cancelar</button>
+                </div>
             </div>
 
             <!-- Formulario Misión (crear / editar) -->
             <div id="form-card-mision" class="card" style="display:none; margin-bottom:20px;">
-                <div class="card-title" id="form-title-mision">📋 Registrar Misión</div>
+                <div class="card-title" id="form-title-mision">📋 Registrar Registro</div>
 
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label for="mision-nombre">Nombre de la Misión *</label>
-                        <input type="text" id="mision-nombre" placeholder="Ej: Familia en Misión, Itinerante, Catequista en parroquia...">
+                <div style="display:grid; grid-template-columns: 110px 1fr 1fr; gap:15px; align-items:start;">
+                    <!-- Orden -->
+                    <div class="form-group" style="margin:0;">
+                        <label for="mision-orden">Orden (Nº)</label>
+                        <input type="number" id="mision-orden" placeholder="Auto" style="width:100%; box-sizing:border-box;">
                     </div>
-
-                    <div class="form-group full-width">
-                        <label for="mision-descripcion">Descripción</label>
-                        <textarea id="mision-descripcion" rows="3" placeholder="Detalles u observaciones sobre esta misión..."></textarea>
+                    <!-- Nombre -->
+                    <div class="form-group" style="margin:0;">
+                        <label for="mision-nombre" id="label-mision-nombre">Nombre *</label>
+                        <input type="text" id="mision-nombre" placeholder="Ej: Nombre del elemento..." style="width:100%; box-sizing:border-box;">
+                    </div>
+                    <!-- Descripción -->
+                    <div class="form-group" style="margin:0;">
+                        <label for="mision-descripcion" id="label-mision-desc">Descripción</label>
+                        <textarea id="mision-descripcion" rows="3" placeholder="Detalles u observaciones..." style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
                     </div>
                 </div>
+                <style>
+                    @media (max-width: 640px) {
+                        #form-card-mision > div[style*="grid-template-columns"] {
+                            grid-template-columns: 1fr !important;
+                        }
+                    }
+                </style>
 
                 <div class="btn-actions" style="margin-top:15px;">
                     <button id="btn-save-mision" class="btn btn-primary">💾 Guardar</button>
@@ -119,19 +191,19 @@
 
             <!-- Listado de misiones -->
             <div id="loading-state-mision" class="loading-state">
-                <div class="spinner"></div><span>Cargando misiones...</span>
+                <div class="spinner"></div><span id="loading-text-mision">Cargando registros...</span>
             </div>
 
             <div id="empty-state-mision" class="empty-state" style="display:none;">
                 <p style="font-size:2rem;">📋</p>
-                <p>No hay misiones registradas.<br>Crea la primera con el botón "+ Nueva Misión".</p>
+                <p id="empty-text-mision">No hay registros.<br>Crea el primero con el botón "+ Nuevo Registro".</p>
             </div>
 
             <div class="card" id="table-card-mision" style="display:none; overflow-x:auto;">
                 <table class="hermanos-table" id="misiones-table">
                     <thead>
                         <tr>
-                            <th>Misión</th>
+                            <th id="th-mision-nombre">Nombre</th>
                             <th>Descripción</th>
                             <th style="text-align:center; width:120px;">Acciones</th>
                         </tr>
