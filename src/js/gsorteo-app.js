@@ -26,6 +26,9 @@ const btnEjecutarSorteo = document.getElementById("btn-ejecutar-sorteo");
 const resultadosContainer = document.getElementById("resultados-sorteo-container");
 const resultadosGrid = document.getElementById("resultados-grupos-grid");
 const btnGuardarSorteo = document.getElementById("btn-guardar-sorteo");
+const modalEncuestaTraditio = document.getElementById("modal-encuesta-traditio");
+const modalEncuestaCardContainer = document.getElementById("modal-encuesta-card-container");
+const btnCloseModalEncuesta = document.getElementById("btn-close-modal-encuesta");
 
 // Tab 2: Historial
 const historialListaContainer = document.getElementById("historial-lista-container");
@@ -86,6 +89,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     chkReutilizar.addEventListener("change", onChkReutilizarChange);
     btnEjecutarSorteo.addEventListener("click", ejecutarSorteo);
     btnGuardarSorteo.addEventListener("click", guardarSorteoResultados);
+
+    if (btnCloseModalEncuesta) {
+        btnCloseModalEncuesta.addEventListener("click", () => {
+            modalEncuestaTraditio.classList.remove("open");
+        });
+    }
+    if (modalEncuestaTraditio) {
+        modalEncuestaTraditio.addEventListener("click", (e) => {
+            if (e.target === modalEncuestaTraditio) {
+                modalEncuestaTraditio.classList.remove("open");
+            }
+        });
+    }
     
     // Tema form submit
     temaForm.addEventListener("submit", saveTema);
@@ -348,6 +364,19 @@ function configureSorteoSteps() {
     if (currentIdx >= 5) { // From Traditio Symboli onwards
         selectTipoSorteo.appendChild(new Option("Sorteo de Artículos (Traditio)", "Articulo"));
     }
+
+    // Set default value based on stage
+    const lowerEtapa = selectedComunidadEtapa.toLowerCase();
+    if (lowerEtapa.includes("traditio") || lowerEtapa.includes("redditio")) {
+        selectTipoSorteo.value = "Articulo";
+    } else if (lowerEtapa.includes("oración") || lowerEtapa.includes("oracion")) {
+        selectTipoSorteo.value = "Salmos";
+    } else if (lowerEtapa.includes("segundo escrutinio")) {
+        selectTipoSorteo.value = "Temas";
+    } else {
+        selectTipoSorteo.value = "Simple";
+    }
+    onTipoSorteoChange();
 }
 
 // Populate themes dropdown
@@ -397,12 +426,9 @@ function ejecutarSorteo() {
                 targetSize = 5;
             }
         } else {
-            if (total >= 25) {
+            if (total > 24) {
                 targetSize = 6;
-                if (groupsCount === 0) groupsCount = 4;
-            } else if (total >= 20) {
-                targetSize = 6;
-                if (groupsCount === 0) groupsCount = 4;
+                if (groupsCount === 0) groupsCount = Math.ceil(total / 6);
             } else if (total > 12) {
                 targetSize = 5;
                 if (groupsCount === 0) groupsCount = Math.ceil(total / 5);
@@ -437,7 +463,7 @@ function ejecutarSorteo() {
     // If no heads selected, select heads automatically
     if (heads.length === 0) {
         if (groupsCount === 0) {
-            groupsCount = Math.max(1, Math.floor(allHermanos.length / targetSize));
+            groupsCount = Math.max(1, Math.ceil(allHermanos.length / targetSize));
         }
         
         // Randomly select G heads from the list, avoiding picking spouses of already selected heads
@@ -579,10 +605,204 @@ function ejecutarSorteo() {
             const dd = String(currentPresentationDate.getDate()).padStart(2, '0');
             group.fechaPresentacion = `${yyyy}-${mm}-${dd}`;
         });
+
+        // If Articulo (Traditio), pre-generate survey sub-groups (encuestas) for every member
+        if (tipo === "Articulo") {
+            groups.forEach(group => {
+                const groupMembers = [];
+                group.cabezasIds.forEach((id, i) => {
+                    groupMembers.push({ id, name: group.cabezasNames[i] });
+                });
+                group.integrantesIds.forEach((id, i) => {
+                    groupMembers.push({ id, name: group.integrantesNames[i] });
+                });
+
+                const groupMemberIds = new Set(groupMembers.map(m => m.id));
+                const poolToSurvey = allHermanos.filter(h => !groupMemberIds.has(h.id));
+                distributeEncuestas(group, groupMembers, poolToSurvey);
+            });
+        }
     }
 
     currentResults = groups;
     renderResultsGrid();
+}
+
+function distributeEncuestas(group, groupMembers, poolToSurvey) {
+    // 1. Identify pairs (couples) and singles in the surveyed pool
+    const pairs = [];
+    const singles = [];
+    const processedIds = new Set();
+
+    poolToSurvey.forEach(h => {
+        if (processedIds.has(h.id)) return;
+
+        if (h.data && h.data.estadoCivil === "Casado" && h.data.esposoId) {
+            const spouse = poolToSurvey.find(sp => sp.id === h.data.esposoId);
+            if (spouse && !processedIds.has(spouse.id)) {
+                const husband = h.data.sexo === "M" ? h : spouse;
+                const wife = h.data.sexo === "M" ? spouse : h;
+                pairs.push({ husband, wife });
+                processedIds.add(h.id);
+                processedIds.add(spouse.id);
+            } else {
+                singles.push(h);
+                processedIds.add(h.id);
+            }
+        } else {
+            singles.push(h);
+            processedIds.add(h.id);
+        }
+    });
+
+    // 2. Shuffle pairs and singles
+    pairs.sort(() => Math.random() - 0.5);
+    singles.sort(() => Math.random() - 0.5);
+
+    // 3. Initialize encuestas structure
+    group.encuestas = {};
+    groupMembers.forEach(m => {
+        group.encuestas[m.id] = {
+            responsableId: m.id,
+            responsableNombre: (m.name || "Hermano").replace(" (Cónyuge)", ""),
+            encuestadosIds: [],
+            encuestadosNames: [],
+            temaNombre: group.temaNombre || "",
+            fechaPresentacion: group.fechaPresentacion || ""
+        };
+    });
+
+    if (groupMembers.length === 0) return;
+
+    // 4. Distribute married couples together (never separate husband and wife in encuestas)
+    let currentMemberIdx = 0;
+    pairs.forEach(pair => {
+        const targetMember = groupMembers[currentMemberIdx % groupMembers.length];
+        const enc = group.encuestas[targetMember.id];
+        if (enc) {
+            enc.encuestadosIds.push(pair.husband.id, pair.wife.id);
+            enc.encuestadosNames.push(pair.husband.name, `${pair.wife.name} (Cónyuge)`);
+        }
+        currentMemberIdx++;
+    });
+
+    // 5. Distribute singles to balance group sizes
+    singles.forEach(single => {
+        const sortedMembers = [...groupMembers].sort((a, b) => {
+            const countA = group.encuestas[a.id].encuestadosIds.length;
+            const countB = group.encuestas[b.id].encuestadosIds.length;
+            return countA - countB;
+        });
+
+        const targetMember = sortedMembers[0];
+        const enc = group.encuestas[targetMember.id];
+        if (enc) {
+            enc.encuestadosIds.push(single.id);
+            enc.encuestadosNames.push(single.name);
+        }
+    });
+}
+
+function getOrCreateEncuesta(group, memberId, memberName) {
+    if (group.encuestas) {
+        if (memberId && group.encuestas[memberId]) return group.encuestas[memberId];
+        if (memberName) {
+            const cleanTarget = memberName.toLowerCase().replace(" (cónyuge)", "").trim();
+            const foundKey = Object.keys(group.encuestas).find(k => {
+                const resp = (group.encuestas[k].responsableNombre || "").toLowerCase().trim();
+                return resp === cleanTarget || resp.includes(cleanTarget) || cleanTarget.includes(resp);
+            });
+            if (foundKey) return group.encuestas[foundKey];
+        }
+    }
+    
+    // Generate dynamically if missing
+    const groupMembers = [];
+    group.cabezasIds?.forEach((id, i) => {
+        groupMembers.push({ id, name: group.cabezasNames[i] });
+    });
+    group.integrantesIds?.forEach((id, i) => {
+        groupMembers.push({ id, name: group.integrantesNames[i] });
+    });
+
+    const groupMemberIds = new Set(groupMembers.map(m => m.id));
+    
+    // Pool of siblings to survey: all community siblings except group members
+    let poolToSurvey = allHermanos.filter(h => !groupMemberIds.has(h.id));
+    
+    // Fallback if allHermanos is empty
+    if (poolToSurvey.length === 0 && currentResults && currentResults.length > 0) {
+        const otherGroups = currentResults.filter(og => og !== group);
+        otherGroups.forEach(og => {
+            og.cabezasIds?.forEach((id, i) => poolToSurvey.push({ id, name: og.cabezasNames[i], data: { estadoCivil: "Soltero" } }));
+            og.integrantesIds?.forEach((id, i) => poolToSurvey.push({ id, name: og.integrantesNames[i], data: { estadoCivil: og.integrantesNames[i].includes("(Cónyuge)") ? "Casado" : "Soltero" } }));
+        });
+    }
+
+    distributeEncuestas(group, groupMembers, poolToSurvey);
+
+    if (memberId && group.encuestas[memberId]) return group.encuestas[memberId];
+    if (memberName) {
+        const cleanTarget = memberName.toLowerCase().replace(" (cónyuge)", "").trim();
+        const foundKey = Object.keys(group.encuestas).find(k => {
+            const resp = (group.encuestas[k].responsableNombre || "").toLowerCase().trim();
+            return resp === cleanTarget || resp.includes(cleanTarget) || cleanTarget.includes(resp);
+        });
+        if (foundKey) return group.encuestas[foundKey];
+    }
+
+    return Object.values(group.encuestas)[0] || null;
+}
+
+function openEncuestaModal(group, memberId, memberName) {
+    const enc = getOrCreateEncuesta(group, memberId, memberName);
+    if (!enc) {
+        console.error("No se pudo obtener la encuesta para:", memberId, memberName);
+        return;
+    }
+
+    const parts = (enc.fechaPresentacion || group.fechaPresentacion || "").split("-");
+    const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (enc.fechaPresentacion || group.fechaPresentacion || "—");
+
+    let encuestadosHTML = '';
+    if (!enc.encuestadosNames || enc.encuestadosNames.length === 0) {
+        encuestadosHTML = `<div style="font-size:0.85rem; color:#64748b; font-style:italic; padding:6px 0;">No hay hermanos asignados para encuestar.</div>`;
+    } else {
+        enc.encuestadosNames.forEach(name => {
+            const isSpouse = name.includes("(Cónyuge)");
+            const cleanName = name.replace(" (Cónyuge)", "");
+            encuestadosHTML += `
+                <div class="sorteo-member-item">
+                    <span>👤 ${cleanName}</span>
+                    <span class="badge-role ${isSpouse ? 'badge-spouse' : 'badge-member'}">${isSpouse ? 'Cónyuge' : 'Integrante'}</span>
+                </div>
+            `;
+        });
+    }
+
+    modalEncuestaCardContainer.innerHTML = `
+        <div class="sorteo-group-card" style="margin:0; box-shadow:none; border:1px solid #e2e8f0; background:#ffffff;">
+            <div class="sorteo-group-header">
+                <span>Grupo de ${enc.responsableNombre}</span>
+                <span style="font-size:0.85rem; color:#64748b;">(${enc.encuestadosNames.length + 1} pers.)</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+                <div class="sorteo-member-item">
+                    <span>👤 <strong>${enc.responsableNombre}</strong></span>
+                    <span class="badge-role badge-head">Cabeza</span>
+                </div>
+                ${encuestadosHTML}
+            </div>
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9; font-size:0.85rem; color:#475569;">
+                <div style="margin-bottom:3px;">📚 <strong>Tema:</strong> ${enc.temaNombre || group.temaNombre || "—"}</div>
+                <div>📅 <strong>Fecha:</strong> ${formattedDate}</div>
+            </div>
+        </div>
+    `;
+
+    if (modalEncuestaTraditio) {
+        modalEncuestaTraditio.classList.add("open");
+    }
 }
 
 function renderResultsGrid() {
@@ -596,9 +816,10 @@ function renderResultsGrid() {
         let membersHTML = '';
         
         // Heads
-        g.cabezasNames.forEach(hName => {
+        g.cabezasNames.forEach((hName, hIdx) => {
+            const hId = g.cabezasIds ? g.cabezasIds[hIdx] : "";
             membersHTML += `
-                <div class="sorteo-member-item">
+                <div class="sorteo-member-item clickable-encuesta-member" data-group-idx="${idx}" data-member-id="${hId}" data-member-name="${hName}" style="cursor:pointer; border-radius:4px; padding:3px 6px;" title="Ver grupo de encuesta de ${hName}">
                     <span>👤 <strong>${hName}</strong></span>
                     <span class="badge-role badge-head">Cabeza</span>
                 </div>
@@ -606,11 +827,13 @@ function renderResultsGrid() {
         });
 
         // Members
-        g.integrantesNames.forEach(mName => {
+        g.integrantesNames.forEach((mName, mIdx) => {
+            const mId = g.integrantesIds ? g.integrantesIds[mIdx] : "";
             const isSpouse = mName.includes("(Cónyuge)");
+            const cleanName = mName.replace(" (Cónyuge)", "");
             membersHTML += `
-                <div class="sorteo-member-item">
-                    <span>👤 ${mName.replace(" (Cónyuge)", "")}</span>
+                <div class="sorteo-member-item clickable-encuesta-member" data-group-idx="${idx}" data-member-id="${mId}" data-member-name="${cleanName}" style="cursor:pointer; border-radius:4px; padding:3px 6px;" title="Ver grupo de encuesta de ${cleanName}">
+                    <span>👤 ${cleanName}</span>
                     <span class="badge-role ${isSpouse ? 'badge-spouse' : 'badge-member'}">${isSpouse ? 'Cónyuge' : 'Integrante'}</span>
                 </div>
             `;
@@ -640,6 +863,26 @@ function renderResultsGrid() {
             ${footerHTML}
         `;
         resultadosGrid.appendChild(card);
+    });
+
+    // Add click listeners to members for Encuesta modal
+    document.querySelectorAll(".clickable-encuesta-member").forEach(el => {
+        el.addEventListener("mouseenter", () => {
+            el.style.backgroundColor = "#f1f5f9";
+        });
+        el.addEventListener("mouseleave", () => {
+            el.style.backgroundColor = "transparent";
+        });
+        el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const groupIdx = parseInt(el.getAttribute("data-group-idx"));
+            const memberId = el.getAttribute("data-member-id");
+            const memberName = el.getAttribute("data-member-name");
+            const group = currentResults[groupIdx];
+            if (group) {
+                openEncuestaModal(group, memberId, memberName);
+            }
+        });
     });
 }
 
@@ -748,13 +991,25 @@ async function loadHistorialSorteos() {
             card.style.cssText = "border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 12px; background: white;";
             
             let gruposSummary = '';
-            data.grupos.forEach(g => {
+            data.grupos.forEach((g, gIdx) => {
+                const isTraditio = data.tipo === "Articulo" || !!g.encuestas;
+                let cabezasHTML = g.cabezasNames?.map((n, i) => {
+                    const hId = g.cabezasIds ? g.cabezasIds[i] : "";
+                    return `<span class="${isTraditio ? 'hist-clickable-encuesta' : ''}" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${hId}" data-member-name="${n}" style="${isTraditio ? 'cursor:pointer; text-decoration:underline; font-weight:bold; color:var(--primary);' : ''}" title="${isTraditio ? 'Ver grupo de encuesta de ' + n : ''}">👤 ${n}</span>`;
+                }).join(", ") || "—";
+
+                let integrantesHTML = g.integrantesNames?.map((n, i) => {
+                    const hId = g.integrantesIds ? g.integrantesIds[i] : "";
+                    const cleanName = n.replace(" (Cónyuge)", "");
+                    return `<span class="${isTraditio ? 'hist-clickable-encuesta' : ''}" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" data-member-id="${hId}" data-member-name="${cleanName}" style="${isTraditio ? 'cursor:pointer; text-decoration:underline;' : ''}" title="${isTraditio ? 'Ver grupo de encuesta de ' + cleanName : ''}">👤 ${cleanName}</span>`;
+                }).join(", ") || "Ninguno";
+
                 gruposSummary += `
                     <div style="margin-top:8px; padding-left:12px; border-left:3px solid var(--primary);">
                         <strong style="font-size:0.85rem; color:var(--primary);">${g.nombreGrupo}</strong>
-                        <div style="font-size:0.8rem; color:#475569;">
-                            Cabezas: ${g.cabezasNames?.join(", ") || "—"} <br>
-                            Integrantes: ${g.integrantesNames?.map(n => n.replace(" (Cónyuge)", "")).join(", ") || "Ninguno"}
+                        <div style="font-size:0.8rem; color:#475569; margin-top:4px;">
+                            Cabezas: ${cabezasHTML} <br>
+                            Integrantes: ${integrantesHTML}
                             ${g.temaNombre ? `<br>📚 Tema: ${g.temaNombre} | 📅 Fecha: ${g.fechaPresentacion}` : ''}
                         </div>
                     </div>
@@ -769,6 +1024,21 @@ async function loadHistorialSorteos() {
                 ${gruposSummary}
             `;
             historialListaContainer.appendChild(card);
+        });
+
+        // Add click listener for historial encuestas
+        document.querySelectorAll(".hist-clickable-encuesta").forEach(el => {
+            el.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const sId = el.getAttribute("data-sorteo-id");
+                const gIdx = parseInt(el.getAttribute("data-group-idx"));
+                const mId = el.getAttribute("data-member-id");
+                const mName = el.getAttribute("data-member-name");
+                const s = savedSorteos.find(item => item.id === sId);
+                if (s && s.grupos && s.grupos[gIdx]) {
+                    openEncuestaModal(s.grupos[gIdx], mId, mName);
+                }
+            });
         });
     } catch(err) {
         console.error("Error loading history:", err);
