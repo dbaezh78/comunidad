@@ -1458,11 +1458,6 @@ async function loadHistorialSorteos() {
 
             const tipoLabel = tipo === "Articulo" ? "Artículos (Traditio)" : tipo === "Temas" ? "Temas con Fechas" : tipo === "Salmos" ? "Salmos (Traditio Symboli)" : tipo;
 
-            // Build "Guardar Fechas" buttons for each sorteo document
-            const saveButtons = sorteosDeTipo.map(data =>
-                `<button class="btn btn-sm btn-primary btn-update-history-dates" data-sorteo-id="${data.id}" style="padding:6px 12px; font-size:0.8rem;">💾 Guardar Fechas</button>`
-            ).join("");
-
             // Use most recent date
             const latestDate = sorteosDeTipo[0].fechaSorteo;
             const dateStr = latestDate ? new Date(latestDate).toLocaleString() : "";
@@ -1472,7 +1467,6 @@ async function loadHistorialSorteos() {
                     <strong style="color:${tipoLabelColor}; font-size:1.05rem;">🎯 Sorteo ${tipoLabel}</strong>
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                         <span style="font-size:0.8rem; color:#64748b;">${dateStr}</span>
-                        ${saveButtons}
                     </div>
                 </div>
             `;
@@ -1530,6 +1524,9 @@ async function loadHistorialSorteos() {
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>📅 <strong>Fecha:</strong></span>
                                     <input type="date" class="hist-group-date-input" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" value="${g.fechaPresentacion}" style="padding:3px 6px; font-size:0.8rem; border-radius:4px; border:1px solid #ccc; width:130px; font-family:sans-serif;" ${canCambiarFecha ? "" : "disabled"}>
+                                    ${canCambiarFecha ? `
+                                        <button class="btn-save-group-date" data-sorteo-id="${data.id}" data-group-idx="${gIdx}" style="background:none; border:none; cursor:pointer; font-size:1.15rem; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#5c6bc0; transition: transform 0.1s;" title="Guardar fecha de este grupo" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">💾</button>
+                                    ` : ''}
                                 </div>
                                 <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
                                     <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:var(--success); font-size:0.85rem;">
@@ -1617,26 +1614,26 @@ async function loadHistorialSorteos() {
                 });
             });
 
-            // Bind save dates buttons
-            section.querySelectorAll(".btn-update-history-dates").forEach(btnUpdate => {
-                btnUpdate.addEventListener("click", async () => {
+            // Bind save dates buttons per group
+            section.querySelectorAll(".btn-save-group-date").forEach(btnSave => {
+                btnSave.addEventListener("click", async () => {
                     if (window.hasPermission && !window.hasPermission("sortear_cambiar_fecha")) {
-                        alert("No tiene permiso para actualizar las fechas de los sorteos.");
+                        window.showAlert("❌ No tiene permiso para actualizar las fechas.", "error");
                         return;
                     }
-                    btnUpdate.disabled = true;
-                    const sId = btnUpdate.getAttribute("data-sorteo-id");
+                    btnSave.disabled = true;
+                    const sId = btnSave.getAttribute("data-sorteo-id");
                     const data = savedSorteos.find(s => s.id === sId);
-                    if (!data) { btnUpdate.disabled = false; return; }
+                    if (!data) { btnSave.disabled = false; return; }
                     try {
                         const sorteoRef = doc(db, "sorteos", sId);
                         await updateDoc(sorteoRef, { grupos: data.grupos });
-                        alert("✅ Fechas del sorteo actualizadas correctamente.");
+                        window.showAlert("✅ Fecha del grupo guardada correctamente.", "success");
                     } catch(e) {
-                        console.error("Error updating history dates:", e);
-                        alert("❌ Error al guardar las fechas: " + e.message);
+                        console.error("Error updating history date for group:", e);
+                        window.showAlert("❌ Error al guardar la fecha: " + e.message, "error");
                     } finally {
-                        btnUpdate.disabled = false;
+                        btnSave.disabled = false;
                     }
                 });
             });
