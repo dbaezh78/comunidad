@@ -13,6 +13,10 @@ const loadingState   = document.getElementById("loading-state");
 const emptyState     = document.getElementById("empty-state");
 const tableCard      = document.getElementById("table-card");
 const tbody          = document.getElementById("hermanos-tbody");
+const tableCardCeleste = document.getElementById("table-card-celeste");
+const celesteTbody   = document.getElementById("hermanos-celeste-tbody");
+const tableCardInactivos = document.getElementById("table-card-inactivos");
+const inactivosTbody = document.getElementById("hermanos-inactivos-tbody");
 const globalAlert    = document.getElementById("global-alert");
 
 // Form
@@ -59,12 +63,17 @@ let cachedComunidades    = {}; // id -> nombre (Comunidad X)
 let catechistMap         = {}; // hermanoId -> array of community names
 let currentSortColumn    = "nombre";
 let currentSortDir       = "asc";
+let celesteSortColumn    = "nombre";
+let celesteSortDir       = "asc";
+let inactivosSortColumn  = "nombre";
+let inactivosSortDir     = "asc";
 let activeFilters        = { nombre: [], parroquia: [], comunidad: [], telefono: [], responsable: [] };
 let editingId            = null;
 let originalSpouseId     = null;
 let currentHijosList     = []; // Lista temporal de hijos para edicion [{nombre, cumple}]
 let currentUserRole      = "hermano";
 let currentUserComunidadId = null;
+let currentViewMode      = localStorage.getItem("hermanos_view_mode") || "single"; // "single" o "three"
 window.currentPrintedHermanos = [];
 
 window.addEventListener("app:ready", async (e) => {
@@ -76,6 +85,24 @@ window.addEventListener("app:ready", async (e) => {
             currentUserComunidadId = uSnap.data().comunidadId || null;
         }
     } catch(err) { console.error(err); }
+
+    // Init View Toggle Switch UI
+    const viewSwitch = document.getElementById("toggle-view-switch");
+
+    const updateToggleUI = () => {
+        if (viewSwitch) {
+            viewSwitch.checked = (currentViewMode === "three");
+        }
+    };
+    updateToggleUI();
+
+    if (viewSwitch) {
+        viewSwitch.addEventListener("change", () => {
+            currentViewMode = viewSwitch.checked ? "three" : "single";
+            localStorage.setItem("hermanos_view_mode", currentViewMode);
+            renderTable(todosHermanos);
+        });
+    }
 
     enforcePermissions();
     await loadParroquias();
@@ -138,11 +165,31 @@ async function cacheAllComunidades() {
 }
 
 function setupSortingListeners() {
-    document.getElementById("th-nombre").addEventListener("click", () => handleSort("nombre"));
-    document.getElementById("th-parroquia").addEventListener("click", () => handleSort("parroquia"));
-    document.getElementById("th-comunidad").addEventListener("click", () => handleSort("comunidad"));
-    document.getElementById("th-telefono").addEventListener("click", () => handleSort("telefono"));
-    document.getElementById("th-responsable").addEventListener("click", () => handleSort("responsable"));
+    const fields = ["nombre", "parroquia", "comunidad", "telefono", "responsable"];
+    
+    // Actives (original)
+    fields.forEach(f => {
+        const th = document.getElementById(`th-${f}`);
+        if (th) {
+            th.addEventListener("click", () => handleSort(f));
+        }
+    });
+
+    // Celeste
+    fields.forEach(f => {
+        const th = document.getElementById(`th-cel-${f}`);
+        if (th) {
+            th.addEventListener("click", () => handleCelesteSort(f));
+        }
+    });
+
+    // Inactives
+    fields.forEach(f => {
+        const th = document.getElementById(`th-inact-${f}`);
+        if (th) {
+            th.addEventListener("click", () => handleInactivosSort(f));
+        }
+    });
 }
 
 const efMenu = document.getElementById("excel-filter-menu");
@@ -155,6 +202,28 @@ const efBtnApply = document.getElementById("ef-btn-apply");
 let efCurrentColumn = "";
 let efCurrentValues = [];
 
+function handleCelesteSort(col) {
+    if (celesteSortColumn === col) {
+        celesteSortDir = celesteSortDir === "asc" ? "desc" : "asc";
+    } else {
+        celesteSortColumn = col;
+        celesteSortDir = "asc";
+    }
+    updateHeaderLabels();
+    renderTable(todosHermanos);
+}
+
+function handleInactivosSort(col) {
+    if (inactivosSortColumn === col) {
+        inactivosSortDir = inactivosSortDir === "asc" ? "desc" : "asc";
+    } else {
+        inactivosSortColumn = col;
+        inactivosSortDir = "asc";
+    }
+    updateHeaderLabels();
+    renderTable(todosHermanos);
+}
+
 function updateHeaderLabels() {
     const cols = {
         "nombre": "Nombre Completo",
@@ -163,6 +232,8 @@ function updateHeaderLabels() {
         "telefono": "Teléfono",
         "responsable": "Responsable"
     };
+
+    // Active table headers
     Object.keys(cols).forEach(k => {
         const th = document.getElementById(`th-${k}`);
         if (!th) return;
@@ -178,6 +249,32 @@ function updateHeaderLabels() {
         }
 
         th.innerHTML = `${cols[k]} ${arrow}${clearBtn}`;
+    });
+
+    // Celeste table headers
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-cel-${k}`);
+        if (!th) return;
+        
+        let arrow = "↕️";
+        if (k === celesteSortColumn) {
+            arrow = celesteSortDir === "asc" ? "▲" : "▼";
+        }
+        
+        th.innerHTML = `${cols[k]} ${arrow}`;
+    });
+
+    // Inactives table headers
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-inact-${k}`);
+        if (!th) return;
+        
+        let arrow = "↕️";
+        if (k === inactivosSortColumn) {
+            arrow = inactivosSortDir === "asc" ? "▲" : "▼";
+        }
+        
+        th.innerHTML = `${cols[k]} ${arrow}`;
     });
 }
 
@@ -518,140 +615,304 @@ function renderTable(lista) {
 
     if (filteredList.length === 0) {
         tableCard.style.display = "none";
+        if (tableCardCeleste) tableCardCeleste.style.display = "none";
+        if (tableCardInactivos) tableCardInactivos.style.display = "none";
         emptyState.style.display = "block";
         return;
     }
 
-    // Ordenar por columna seleccionada
-    filteredList.sort((a, b) => {
-        let valA = "";
-        let valB = "";
+    const tableInnerTitle = document.getElementById("table-card-inner-title");
 
-        if (currentSortColumn === "nombre") {
-            valA = `${a.primerNombre || ""} ${a.primerApellido || ""}`.toLowerCase();
-            valB = `${b.primerNombre || ""} ${b.primerApellido || ""}`.toLowerCase();
-        } else if (currentSortColumn === "parroquia") {
-            valA = (cachedParroquias[a.parroquiaId] || "").toLowerCase();
-            valB = (cachedParroquias[b.parroquiaId] || "").toLowerCase();
-        } else if (currentSortColumn === "comunidad") {
-            valA = (cachedComunidades[a.comunidadId] || "").toLowerCase();
-            valB = (cachedComunidades[b.comunidadId] || "").toLowerCase();
-        } else if (currentSortColumn === "telefono") {
-            valA = (a.telefono || "").toLowerCase();
-            valB = (b.telefono || "").toLowerCase();
-        } else if (currentSortColumn === "responsable") {
-            valA = (a.razon || "").toLowerCase() + (a.posicionResponsable || "");
-            valB = (b.razon || "").toLowerCase() + (b.posicionResponsable || "");
+    if (currentViewMode === "single") {
+        // Hiding additional tables cards
+        if (tableCardCeleste) tableCardCeleste.style.display = "none";
+        if (tableCardInactivos) tableCardInactivos.style.display = "none";
+        if (tableInnerTitle) {
+            tableInnerTitle.textContent = "👥 Listado de todos los hermanos";
+            tableInnerTitle.style.display = "block";
         }
 
-        if (currentSortDir === "asc") {
-            return valA.localeCompare(valB);
-        } else {
-            return valB.localeCompare(valA);
-        }
-    });
+        window.currentPrintedHermanos = filteredList;
+        emptyState.style.display = "none";
 
-    window.currentPrintedHermanos = filteredList;
-    emptyState.style.display = "none";
-    tableCard.style.display = "block";
-    tbody.innerHTML = "";
-    
-    filteredList.forEach(h => {
-        const nombreCompl = `${h.primerNombre} ${h.segundoNombre||""} ${h.primerApellido} ${h.segundoApellido||""}`.replace(/\s+/g, ' ').trim();
-        const pNombre = cachedParroquias[h.parroquiaId] || "—";
-        const cNombre = formatComunidadName(cachedComunidades[h.comunidadId] || "—");
-        const tr = document.createElement("tr");
-        
-        const locIcon = h.location?.lat 
-            ? `<a href="https://maps.google.com/?q=${h.location.lat},${h.location.lng}" target="_blank" style="text-decoration:none;">📍</a>` 
-            : `<span style="color:#ccc;">—</span>`;
+        // Sort consolidated list
+        filteredList.sort((a, b) => {
+            let valA = "";
+            let valB = "";
 
-        // Render tags de carismas con iconos
-        let carismasTags = "";
-        if (h.carismas && h.carismas.length > 0) {
-            carismasTags = `<div class="carismas-list">` + h.carismas.map(name => {
-                const info = todosCarismas.find(tc => tc.nombre === name);
-                const ico = info?.icono || "🔘";
-                return `<span class="carisma-tag">${ico} ${name}</span>`;
-            }).join("") + `</div>`;
-        }
-
-        // Tag de razon / responsable
-        let razonBadge = `<span class="badge-rol badge-hno">${h.razon || "Hermano"}</span>`;
-        if (h.razon === "Comunidad Celeste") {
-            razonBadge = `<span class="badge-rol" style="background: gold; color: white; font-weight: bold;">👼 Celeste</span>`;
-        } else if (h.razon === "Responsable") {
-            let label = "Responsable";
-            let suffix = h.posicionResponsable ? ` (${h.posicionResponsable}°)` : "";
-            if (window.innerWidth < 992) {
-                label = "RESP.";
-                suffix = h.posicionResponsable ? ` ${h.posicionResponsable}°` : "";
+            if (currentSortColumn === "nombre") {
+                valA = `${a.primerNombre || ""} ${a.primerApellido || ""}`.toLowerCase();
+                valB = `${b.primerNombre || ""} ${b.primerApellido || ""}`.toLowerCase();
+            } else if (currentSortColumn === "parroquia") {
+                valA = (cachedParroquias[a.parroquiaId] || "").toLowerCase();
+                valB = (cachedParroquias[b.parroquiaId] || "").toLowerCase();
+            } else if (currentSortColumn === "comunidad") {
+                valA = (cachedComunidades[a.comunidadId] || "").toLowerCase();
+                valB = (cachedComunidades[b.comunidadId] || "").toLowerCase();
+            } else if (currentSortColumn === "telefono") {
+                valA = (a.telefono || "").toLowerCase();
+                valB = (b.telefono || "").toLowerCase();
+            } else if (currentSortColumn === "responsable") {
+                valA = (a.razon || "").toLowerCase() + (a.posicionResponsable || "");
+                valB = (b.razon || "").toLowerCase() + (b.posicionResponsable || "");
             }
-            razonBadge = `<span class="badge-rol badge-1ro">${label}${suffix}</span>`;
-        }
 
-        // Badge de activo / inactivo
-        let activoBadge = "";
-        if (h.activo === false) {
-            activoBadge = `<span style="margin-left:8px; font-size:0.68rem; background:#f8d7da; color:#721c24; padding:2px 6px; border-radius:4px; font-weight:600; font-family:'Segoe UI',sans-serif;">Inactivo</span>`;
-        }
-
-        const hId = h.id;
-        const isCatequista = catechistMap[hId] && Object.keys(catechistMap[hId]).length > 0;
-        let tooltipText = "";
-        if (isCatequista) {
-            const pParts = [];
-            for (const [pName, cNums] of Object.entries(catechistMap[hId])) {
-                pParts.push(`${pName} (${cNums.sort().join(', ')})`);
+            if (currentSortDir === "asc") {
+                return valA.localeCompare(valB);
+            } else {
+                return valB.localeCompare(valA);
             }
-            tooltipText = `Catequista de: ${pParts.join(', ')}`;
-        }
-        const catequistaAsterisk = isCatequista 
-            ? `<span style="color:#28a745; font-weight:bold; cursor:help; font-size:1.15rem; margin-left:4px;" title="${tooltipText}">*</span>`
-            : "";
+        });
 
-        tr.innerHTML = `
-            <td>
-                <div><strong>${nombreCompl}</strong>${catequistaAsterisk} ${activoBadge}</div>
-            </td>
-            <td>${pNombre}</td>
-            <td>${cNombre}</td>
-            <td>${h.telefono ? `<a href="${getWhatsAppLink(h.telefono)}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;" title="Abrir chat de WhatsApp">${formatPhoneString(h.telefono)}</a>` : "—"}</td>
-            <td style="text-align:center;">${razonBadge}</td>
-            <td style="text-align:center;">${locIcon}</td>
-            <td style="text-align:center;">
-                ${window.hasPermission("hermanos_ver") ? `<button class="btn btn-sm btn-outline btn-view" data-id="${h.id}" title="Ver hermano" style="margin-right:4px;">👁️</button>` : ""}
-                ${window.hasPermission("hermanos_editar") ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${h.id}">✏️</button>` : ""}
-            </td>
-        `;
-        
-        const cellNombre = tr.querySelector("td:first-child");
-        if (cellNombre) {
-            cellNombre.style.cursor = "pointer";
-            cellNombre.addEventListener("click", (e) => {
-                if (e.target.tagName !== "A" && e.target.tagName !== "BUTTON") {
-                    openViewForm(h);
+        const renderRows = (list, targetTbody, targetCard) => {
+            targetTbody.innerHTML = "";
+            if (list.length === 0) {
+                targetCard.style.display = "none";
+                return;
+            }
+            targetCard.style.display = "block";
+
+            list.forEach(h => {
+                const nombreCompl = `${h.primerNombre} ${h.segundoNombre||""} ${h.primerApellido} ${h.segundoApellido||""}`.replace(/\s+/g, ' ').trim();
+                const pNombre = cachedParroquias[h.parroquiaId] || "—";
+                const cNombre = formatComunidadName(cachedComunidades[h.comunidadId] || "—");
+                const tr = document.createElement("tr");
+                
+                const locIcon = h.location?.lat 
+                    ? `<a href="https://maps.google.com/?q=${h.location.lat},${h.location.lng}" target="_blank" style="text-decoration:none;">📍</a>` 
+                    : `<span style="color:#ccc;">—</span>`;
+
+                // Tag de razon / responsable
+                let razonBadge = `<span class="badge-rol badge-hno">${h.razon || "Hermano"}</span>`;
+                if (h.razon === "Comunidad Celeste") {
+                    razonBadge = `<span class="badge-rol" style="background: gold; color: white; font-weight: bold;">👼 Celeste</span>`;
+                } else if (h.razon === "Responsable") {
+                    let label = "Responsable";
+                    let suffix = h.posicionResponsable ? ` (${h.posicionResponsable}°)` : "";
+                    if (window.innerWidth < 992) {
+                        label = "RESP.";
+                        suffix = h.posicionResponsable ? ` ${h.posicionResponsable}°` : "";
+                    }
+                    razonBadge = `<span class="badge-rol badge-1ro">${label}${suffix}</span>`;
+                }
+
+                // Badge de activo / inactivo
+                let activoBadge = "";
+                if (h.activo === false) {
+                    activoBadge = `<span style="margin-left:8px; font-size:0.68rem; background:#f8d7da; color:#721c24; padding:2px 6px; border-radius:4px; font-weight:600; font-family:'Segoe UI',sans-serif;">Inactivo</span>`;
+                }
+
+                const hId = h.id;
+                const isCatequista = catechistMap[hId] && Object.keys(catechistMap[hId]).length > 0;
+                let tooltipText = "";
+                if (isCatequista) {
+                    const pParts = [];
+                    for (const [pName, cNums] of Object.entries(catechistMap[hId])) {
+                        pParts.push(`${pName} (${cNums.sort().join(', ')})`);
+                    }
+                    tooltipText = `Catequista de: ${pParts.join(', ')}`;
+                }
+                const catequistaAsterisk = isCatequista 
+                    ? `<span style="color:#28a745; font-weight:bold; cursor:help; font-size:1.15rem; margin-left:4px;" title="${tooltipText}">*</span>`
+                    : "";
+
+                tr.innerHTML = `
+                    <td>
+                        <div><strong>${nombreCompl}</strong>${catequistaAsterisk} ${activoBadge}</div>
+                    </td>
+                    <td>${pNombre}</td>
+                    <td>${cNombre}</td>
+                    <td>${h.telefono ? `<a href="${getWhatsAppLink(h.telefono)}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;" title="Abrir chat de WhatsApp">${formatPhoneString(h.telefono)}</a>` : "—"}</td>
+                    <td style="text-align:center;">${razonBadge}</td>
+                    <td style="text-align:center;">${locIcon}</td>
+                    <td style="text-align:center;">
+                        ${window.hasPermission("hermanos_ver") ? `<button class="btn btn-sm btn-outline btn-view" data-id="${h.id}" title="Ver hermano" style="margin-right:4px;">👁️</button>` : ""}
+                        ${(window.hasPermission("hermanos_editar") || (auth.currentUser && h.correo && h.correo.toLowerCase() === auth.currentUser.email.toLowerCase())) ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${h.id}">✏️</button>` : ""}
+                    </td>
+                `;
+                
+                const cellNombre = tr.querySelector("td:first-child");
+                if (cellNombre) {
+                    cellNombre.style.cursor = "pointer";
+                    cellNombre.addEventListener("click", (e) => {
+                        if (e.target.tagName !== "A" && e.target.tagName !== "BUTTON") {
+                            openViewForm(h);
+                        }
+                    });
+                }
+
+                const btnView = tr.querySelector(".btn-view");
+                if (btnView) {
+                    btnView.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        openViewForm(h);
+                    });
+                }
+
+                const btnEdit = tr.querySelector(".btn-edit");
+                if (btnEdit) {
+                    btnEdit.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        openEditForm(h);
+                    });
+                }
+                targetTbody.appendChild(tr);
+            });
+        };
+
+        renderRows(filteredList, tbody, tableCard);
+    } else {
+        // Mode: three tables
+        if (tableInnerTitle) {
+            tableInnerTitle.textContent = "👥 Hermanos Activos";
+            tableInnerTitle.style.display = "block";
+        }
+
+        // Separate categories
+        const celestiales = filteredList.filter(h => h.razon === "Comunidad Celeste");
+        const noCelestiales = filteredList.filter(h => h.razon !== "Comunidad Celeste");
+        const activos = noCelestiales.filter(h => h.activo !== false);
+        const inactivos = noCelestiales.filter(h => h.activo === false);
+
+        window.currentPrintedHermanos = filteredList;
+        emptyState.style.display = "none";
+
+        const sortList = (list, col, dir) => {
+            list.sort((a, b) => {
+                let valA = "";
+                let valB = "";
+
+                if (col === "nombre") {
+                    valA = `${a.primerNombre || ""} ${a.primerApellido || ""}`.toLowerCase();
+                    valB = `${b.primerNombre || ""} ${b.primerApellido || ""}`.toLowerCase();
+                } else if (col === "parroquia") {
+                    valA = (cachedParroquias[a.parroquiaId] || "").toLowerCase();
+                    valB = (cachedParroquias[b.parroquiaId] || "").toLowerCase();
+                } else if (col === "comunidad") {
+                    valA = (cachedComunidades[a.comunidadId] || "").toLowerCase();
+                    valB = (cachedComunidades[b.comunidadId] || "").toLowerCase();
+                } else if (col === "telefono") {
+                    valA = (a.telefono || "").toLowerCase();
+                    valB = (b.telefono || "").toLowerCase();
+                } else if (col === "responsable") {
+                    valA = (a.razon || "").toLowerCase() + (a.posicionResponsable || "");
+                    valB = (b.razon || "").toLowerCase() + (b.posicionResponsable || "");
+                }
+
+                if (dir === "asc") {
+                    return valA.localeCompare(valB);
+                } else {
+                    return valB.localeCompare(valA);
                 }
             });
-        }
+        };
 
-        const btnView = tr.querySelector(".btn-view");
-        if (btnView) {
-            btnView.addEventListener("click", (e) => {
-                e.stopPropagation();
-                openViewForm(h);
-            });
-        }
+        // Sort all three lists independently
+        sortList(activos, currentSortColumn, currentSortDir);
+        sortList(celestiales, celesteSortColumn, celesteSortDir);
+        sortList(inactivos, inactivosSortColumn, inactivosSortDir);
 
-        const btnEdit = tr.querySelector(".btn-edit");
-        if (btnEdit) {
-            btnEdit.addEventListener("click", (e) => {
-                e.stopPropagation();
-                openEditForm(h);
+        const renderRows = (list, targetTbody, targetCard) => {
+            targetTbody.innerHTML = "";
+            if (list.length === 0) {
+                targetCard.style.display = "none";
+                return;
+            }
+            targetCard.style.display = "block";
+
+            list.forEach(h => {
+                const nombreCompl = `${h.primerNombre} ${h.segundoNombre||""} ${h.primerApellido} ${h.segundoApellido||""}`.replace(/\s+/g, ' ').trim();
+                const pNombre = cachedParroquias[h.parroquiaId] || "—";
+                const cNombre = formatComunidadName(cachedComunidades[h.comunidadId] || "—");
+                const tr = document.createElement("tr");
+                
+                const locIcon = h.location?.lat 
+                    ? `<a href="https://maps.google.com/?q=${h.location.lat},${h.location.lng}" target="_blank" style="text-decoration:none;">📍</a>` 
+                    : `<span style="color:#ccc;">—</span>`;
+
+                // Tag de razon / responsable
+                let razonBadge = `<span class="badge-rol badge-hno">${h.razon || "Hermano"}</span>`;
+                if (h.razon === "Comunidad Celeste") {
+                    razonBadge = `<span class="badge-rol" style="background: gold; color: white; font-weight: bold;">👼 Celeste</span>`;
+                } else if (h.razon === "Responsable") {
+                    let label = "Responsable";
+                    let suffix = h.posicionResponsable ? ` (${h.posicionResponsable}°)` : "";
+                    if (window.innerWidth < 992) {
+                        label = "RESP.";
+                        suffix = h.posicionResponsable ? ` ${h.posicionResponsable}°` : "";
+                    }
+                    razonBadge = `<span class="badge-rol badge-1ro">${label}${suffix}</span>`;
+                }
+
+                // Badge de activo / inactivo
+                let activoBadge = "";
+                if (h.activo === false) {
+                    activoBadge = `<span style="margin-left:8px; font-size:0.68rem; background:#f8d7da; color:#721c24; padding:2px 6px; border-radius:4px; font-weight:600; font-family:'Segoe UI',sans-serif;">Inactivo</span>`;
+                }
+
+                const hId = h.id;
+                const isCatequista = catechistMap[hId] && Object.keys(catechistMap[hId]).length > 0;
+                let tooltipText = "";
+                if (isCatequista) {
+                    const pParts = [];
+                    for (const [pName, cNums] of Object.entries(catechistMap[hId])) {
+                        pParts.push(`${pName} (${cNums.sort().join(', ')})`);
+                    }
+                    tooltipText = `Catequista de: ${pParts.join(', ')}`;
+                }
+                const catequistaAsterisk = isCatequista 
+                    ? `<span style="color:#28a745; font-weight:bold; cursor:help; font-size:1.15rem; margin-left:4px;" title="${tooltipText}">*</span>`
+                    : "";
+
+                tr.innerHTML = `
+                    <td>
+                        <div><strong>${nombreCompl}</strong>${catequistaAsterisk} ${activoBadge}</div>
+                    </td>
+                    <td>${pNombre}</td>
+                    <td>${cNombre}</td>
+                    <td>${h.telefono ? `<a href="${getWhatsAppLink(h.telefono)}" target="_blank" style="text-decoration:none; color:inherit; font-weight:600;" title="Abrir chat de WhatsApp">${formatPhoneString(h.telefono)}</a>` : "—"}</td>
+                    <td style="text-align:center;">${razonBadge}</td>
+                    <td style="text-align:center;">${locIcon}</td>
+                    <td style="text-align:center;">
+                        ${window.hasPermission("hermanos_ver") ? `<button class="btn btn-sm btn-outline btn-view" data-id="${h.id}" title="Ver hermano" style="margin-right:4px;">👁️</button>` : ""}
+                        ${(window.hasPermission("hermanos_editar") || (auth.currentUser && h.correo && h.correo.toLowerCase() === auth.currentUser.email.toLowerCase())) ? `<button class="btn btn-sm btn-outline btn-edit" data-id="${h.id}">✏️</button>` : ""}
+                    </td>
+                `;
+                
+                const cellNombre = tr.querySelector("td:first-child");
+                if (cellNombre) {
+                    cellNombre.style.cursor = "pointer";
+                    cellNombre.addEventListener("click", (e) => {
+                        if (e.target.tagName !== "A" && e.target.tagName !== "BUTTON") {
+                            openViewForm(h);
+                        }
+                    });
+                }
+
+                const btnView = tr.querySelector(".btn-view");
+                if (btnView) {
+                    btnView.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        openViewForm(h);
+                    });
+                }
+
+                const btnEdit = tr.querySelector(".btn-edit");
+                if (btnEdit) {
+                    btnEdit.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        openEditForm(h);
+                    });
+                }
+                targetTbody.appendChild(tr);
             });
-        }
-        tbody.appendChild(tr);
-    });
+        };
+
+        // Render each category into its corresponding table
+        renderRows(activos, tbody, tableCard);
+        renderRows(celestiales, celesteTbody, tableCardCeleste);
+        renderRows(inactivos, inactivosTbody, tableCardInactivos);
+    }
 }
 
 // ── Búsqueda ──────────────────────────────────────
@@ -854,6 +1115,11 @@ async function openEditForm(h) {
     }
     
     btnDelete.style.display = (window.hasPermission && window.hasPermission("hermanos_eliminar")) ? "inline-flex" : "none";
+    
+    // Allow self saving if editing own user
+    const isSelfUser = auth.currentUser && h.correo && h.correo.toLowerCase() === auth.currentUser.email.toLowerCase();
+    btnSave.style.display = (window.hasPermission("hermanos_guardar") || isSelfUser) ? "inline-block" : "none";
+
     listPanel.style.display = "none";
     formPanel.style.display = "block";
 }
@@ -891,6 +1157,11 @@ function clearForm() {
 
     // Re-enforce normal permissions (like if they don't have hermanos_cambiar_activo)
     enforcePermissions();
+
+    const btnSave = document.getElementById("btn-save");
+    if (btnSave) {
+        btnSave.style.display = window.hasPermission("hermanos_guardar") ? "inline-block" : "none";
+    }
 
     hActivo.value = "true";
     hMision.value = "";

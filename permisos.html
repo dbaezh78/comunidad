@@ -167,6 +167,10 @@
                             <input type="text" id="g-nombre" placeholder="Nombre legible">
                         </div>
                     </div>
+                    <div style="margin-top:16px; display:flex; align-items:center; gap:8px; justify-content:flex-start; width:fit-content;">
+                        <input type="checkbox" id="g-default" style="width:18px; height:18px; cursor:pointer;">
+                        <label for="g-default" style="font-weight:700; color:#475569; cursor:pointer; margin:0; font-size:0.85rem; letter-spacing:0.5px;">GRUPO POR DEFECTO</label>
+                    </div>
                     <div class="btn-actions" style="margin-top:20px;">
                         <button id="btn-save-grupo" class="btn btn-primary">💾 Guardar Grupo</button>
                         <button id="btn-cancel-grupo" class="btn btn-outline" style="display:none;">Cancelar</button>
@@ -181,11 +185,12 @@
                                 <tr>
                                     <th>Identificador</th>
                                     <th>Nombre del Grupo</th>
+                                    <th style="text-align:center;">Por Defecto</th>
                                     <th style="text-align:center;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="grupos-tbody">
-                                <tr><td colspan="3" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando...</td></tr>
+                                <tr><td colspan="4" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -197,7 +202,14 @@
                 <div class="card">
                     <div class="card-title" style="flex-direction:column; align-items:start; gap:8px;">
                         <label style="font-size:0.85rem; font-weight:600; color:#475569;">Selecciona el Grupo a Configurar:</label>
-                        <select id="select-grupo" style="width:100%; max-width:400px; padding:8px; border-radius:4px; border:1px solid #cbd5e1; font-weight:600;"></select>
+                        <div style="display:flex; gap:12px; align-items:center; width:100%; flex-wrap:wrap; width: -webkit-fill-available; width: -moz-available;">
+                            <select id="select-grupo" style="flex:1; max-width:400px; padding:8px; border-radius:4px; border:1px solid #cbd5e1; font-weight:600;"></select>
+                            <div style="display:flex; align-items:center; gap:8px; background:#f1f5f9; padding:6px 12px; border-radius:6px; border:1px solid #e2e8f0; font-family:sans-serif;">
+                                <span style="font-size:0.8rem; font-weight:600; color:#475569;">📋 Copiar de:</span>
+                                <select id="select-copiar-origen" style="padding:6px; border-radius:4px; border:1px solid #cbd5e1; font-size:0.85rem; font-weight:600; background:white;"></select>
+                                <button id="btn-copiar-permisos" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem; background:white; font-weight:600;">Copiar Permisos</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div style="margin-top:20px;">

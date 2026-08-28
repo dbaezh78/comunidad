@@ -1519,7 +1519,7 @@ async function loadHistorialSorteos() {
                     let footerHTML = '';
                     if (g.fechaPresentacion !== undefined) {
                         footerHTML = `
-                            <div style="margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9; font-size:0.85rem; color:#475569; display:flex; flex-direction:column; gap:8px;">
+                            <div style="margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9; font-size:0.95rem; color:blue; display:flex; flex-direction:column; gap:8px; font-weight: bold;">
                                 ${g.temaNombre ? `<div>📚 <strong>Tema:</strong> ${g.temaNombre}</div>` : ''}
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <span>📅 <strong>Fecha:</strong></span>

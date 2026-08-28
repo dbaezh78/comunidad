@@ -205,13 +205,14 @@
                         
                         <!-- Etapas Realizadas Table -->
                         <div class="form-group full-width" style="margin-top:15px; border-top:1px solid #cbd5e1; padding-top:15px; margin-bottom: 15px;">
-                            <label style="font-weight:700; color:var(--primary); margin-bottom:8px; display:block;">Etapas Realizadas (Fechas de Conclusión)</label>
+                            <label style="font-weight:700; color:var(--primary); margin-bottom:8px; display:block;">Etapas Realizadas (Fechas de Convivencia)</label>
                             <div style="max-height: 250px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; background: white; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);">
                                 <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                                     <thead>
                                         <tr style="border-bottom: 2px solid #cbd5e1; text-align: left;">
+                                            <th style="padding: 6px; color:#475569; font-weight:600; text-align: center; width: 60px;">Paso #</th>
                                             <th style="padding: 6px; color:#475569; font-weight:600;">Etapa</th>
-                                            <th style="padding: 6px; width: 180px; color:#475569; font-weight:600;">Fecha de Conclusión</th>
+                                            <th style="padding: 6px; width: 180px; color:#475569; font-weight:600;">Fecha de Convivencia</th>
                                         </tr>
                                     </thead>
                                     <tbody id="comunidad-etapas-fechas-tbody">
@@ -295,15 +296,65 @@
                 <div style="overflow-x:auto;">
                     <table class="hermanos-table" id="hermanos-table" style="display:none;">
                         <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Cumpleaños</th>
-                                <th>Celular</th>
-                                <th style="text-align:center;">Ubic.</th>
-                                <th style="text-align:center;">Rol</th>
+                            <tr style="cursor: pointer; user-select: none;">
+                                <th id="th-act-nombre">Nombre ↕️</th>
+                                <th id="th-act-cumple">Cumpleaños ↕️</th>
+                                <th id="th-act-celular">Celular ↕️</th>
+                                <th id="th-act-ubic" style="text-align:center;">Ubic. ↕️</th>
+                                <th id="th-act-rol" style="text-align:center;">Rol ↕️</th>
                             </tr>
                         </thead>
                         <tbody id="hermanos-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ── Lista de Hermanos No Activos ── -->
+            <div class="card" id="card-hermanos-no-activos" style="margin-top: 24px;">
+                <div class="card-title" style="justify-content:space-between;">
+                    <span>👥 Hermanos de la Comunidad No Activos</span>
+                    <span id="hermanos-no-activos-count" style="font-size:0.82rem;color:#7f8c8d;font-weight:400;"></span>
+                </div>
+                <div id="hermanos-no-activos-empty" class="empty-state" style="padding:20px; font-style:italic; color:#64748b;">
+                    No hay hermanos inactivos en esta comunidad.
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="hermanos-table" id="hermanos-no-activos-table" style="display:none; width: 100%;">
+                        <thead>
+                            <tr style="cursor: pointer; user-select: none;">
+                                <th id="th-inact-nombre">Nombre ↕️</th>
+                                <th id="th-inact-cumple">Cumpleaños ↕️</th>
+                                <th id="th-inact-celular">Celular ↕️</th>
+                                <th id="th-inact-ubic" style="text-align:center;">Ubic. ↕️</th>
+                                <th id="th-inact-rol" style="text-align:center;">Rol ↕️</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hermanos-no-activos-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ── Lista de Hermanos Celeste ── -->
+            <div class="card" id="card-hermanos-celeste" style="margin-top: 24px;">
+                <div class="card-title" style="justify-content:space-between;">
+                    <span>👥 Hermanos de la Comunidad Celeste</span>
+                    <span id="hermanos-celeste-count" style="font-size:0.82rem;color:#7f8c8d;font-weight:400;"></span>
+                </div>
+                <div id="hermanos-celeste-empty" class="empty-state" style="padding:20px; font-style:italic; color:#64748b;">
+                    No hay hermanos celestes en esta comunidad.
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="hermanos-table" id="hermanos-celeste-table" style="display:none; width: 100%;">
+                        <thead>
+                            <tr style="cursor: pointer; user-select: none;">
+                                <th id="th-cel-nombre">Nombre ↕️</th>
+                                <th id="th-cel-cumple">Cumpleaños ↕️</th>
+                                <th id="th-cel-celular">Celular ↕️</th>
+                                <th id="th-cel-ubic" style="text-align:center;">Ubic. ↕️</th>
+                                <th id="th-cel-rol" style="text-align:center;">Rol ↕️</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hermanos-celeste-tbody"></tbody>
                     </table>
                 </div>
             </div>

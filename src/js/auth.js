@@ -101,7 +101,7 @@ async function checkCommunityAccess(user) {
 
     updateLoader(75);
 
-    const isCreator = user.email.toLowerCase().includes("dbaezh");
+    const isCreator = user.email.toLowerCase() === "dbaezh78@gmail.com";
     if (isCreator) {
         allowUserAccess(user);
         return;
@@ -220,7 +220,6 @@ async function allowUserAccess(user) {
             html += `<a href="itinerario.html" class="nav-link ${basePage === 'itinerario.html' ? 'active' : ''}"><span class="nav-icon">🗺️</span> Itinerario</a>`;
         }
         if (window.hasPermission("sortear_ver")) {
-            html += `<a href="sortear.html" class="nav-link ${basePage === 'sortear.html' ? 'active' : ''}"><span class="nav-icon">🎲</span> Sortear</a>`;
             html += `<a href="gsorteo.html" class="nav-link ${basePage === 'gsorteo.html' ? 'active' : ''}"><span class="nav-icon">📊</span> Sorteo Grupos</a>`;
         }
         if (window.hasPermission("codigo_ver")) {
@@ -232,6 +231,7 @@ async function allowUserAccess(user) {
         if (window.hasPermission("datos_ver")) {
             html += `<a href="datos.html" class="nav-link ${basePage === 'datos.html' ? 'active' : ''}"><span class="nav-icon">📂</span> Datos</a>`;
         }
+        // Sorteo Comunidad 4 removed
         
         navContainer.innerHTML = html;
 
@@ -252,6 +252,7 @@ async function allowUserAccess(user) {
 
         cardLinks.forEach(link => {
             const href = link.getAttribute("href");
+            link.style.display = ""; // Reset visibility
             if (pageGuards[href] && !pageGuards[href]()) {
                 link.style.display = "none";
             }
@@ -401,13 +402,29 @@ async function allowUserAccess(user) {
         try {
             const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
             if (uSnap.exists()) {
-                rol = uSnap.data().rol || "hermano";
+                rol = uSnap.data().rol;
+                if (!rol) {
+                    // Try to find default role
+                    const rolesSnap = await getDocs(collection(db, "permisosRoles"));
+                    rolesSnap.forEach(d => {
+                        if (d.data().isDefaultRole) rol = d.id;
+                    });
+                    if (!rol) rol = "hermano";
+                }
                 window.userPermissions.rol = rol;
                 window.currentUserComunidadId = uSnap.data().comunidadId || null;
+            } else {
+                // Try to find default role
+                const rolesSnap = await getDocs(collection(db, "permisosRoles"));
+                rolesSnap.forEach(d => {
+                    if (d.data().isDefaultRole) rol = d.id;
+                });
+                window.userPermissions.rol = rol;
             }
             
             // Escuchar en tiempo real los permisos del rol del usuario
             onSnapshot(doc(db, "permisosRoles", rol), (pSnap) => {
+                window.userPermissions.rol = rol;
                 if (pSnap.exists()) {
                     const pData = pSnap.data();
                     window.userPermissions.adminTotal = !!pData.adminTotal;
@@ -444,6 +461,16 @@ async function registerUserLogin(user) {
         if (uSnap.exists()) {
             rol = uSnap.data().rol || "hermano";
             baneado = uSnap.data().baneado || false;
+        } else {
+            // Find which group has been set as default in DB
+            const rolesSnap = await getDocs(collection(db, "permisosRoles"));
+            let dbDefault = null;
+            rolesSnap.forEach(d => {
+                if (d.data().isDefaultRole) dbDefault = d.id;
+            });
+            if (dbDefault) {
+                rol = dbDefault;
+            }
         }
     } catch(e) { console.error(e); }
 

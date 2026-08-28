@@ -53,6 +53,20 @@ const hermanosEmpty      = document.getElementById("hermanos-empty");
 const hermanosLoading    = document.getElementById("hermanos-loading");
 const hermanosCount      = document.getElementById("hermanos-count");
 
+// Hermanos No Activos
+const hermanosNoActivosTable = document.getElementById("hermanos-no-activos-table");
+const hermanosNoActivosTbody = document.getElementById("hermanos-no-activos-tbody");
+const hermanosNoActivosEmpty = document.getElementById("hermanos-no-activos-empty");
+const hermanosNoActivosCount = document.getElementById("hermanos-no-activos-count");
+const cardHermanosNoActivos  = document.getElementById("card-hermanos-no-activos");
+
+// Hermanos Celeste
+const hermanosCelesteTable   = document.getElementById("hermanos-celeste-table");
+const hermanosCelesteTbody   = document.getElementById("hermanos-celeste-tbody");
+const hermanosCelesteEmpty   = document.getElementById("hermanos-celeste-empty");
+const hermanosCelesteCount   = document.getElementById("hermanos-celeste-count");
+const cardHermanosCeleste    = document.getElementById("card-hermanos-celeste");
+
 // Estado
 let currentParroquiaId   = null;
 let currentComunidadId   = null;
@@ -71,6 +85,14 @@ let currentSortColumn   = "parroquiaNombre";
 let currentSortDir      = "asc";
 let activeFilters       = { parroquiaNombre: [], numero: [], etapaNombre: [], catequistaNombre: [] };
 let filterHistory       = [];
+
+// Sort state for community member lists
+let hermanosSortColumn = "nombre";
+let hermanosSortDir = "asc";
+let hermanosNoActivosSortColumn = "nombre";
+let hermanosNoActivosSortDir = "asc";
+let hermanosCelesteSortColumn = "nombre";
+let hermanosCelesteSortDir = "asc";
 
 const NUMS_RESP = ["","1ro","2do","3ro","4to","5to","6to","7mo","8vo"];
 
@@ -129,10 +151,24 @@ async function loadItinerarios() {
     try {
         const snap = await getDocs(query(collection(db, "itinerario"), orderBy("createdAt", "asc")));
         snap.forEach(d => {
-            const data = { id: d.id, nombre: d.data().nombre };
+            const data = { id: d.id, ...d.data() };
             allItinerarios.push(data);
-            cEtapa.appendChild(new Option(data.nombre, data.id));
         });
+
+        // Sort in memory by orden (ascending), then by createdAt (ascending)
+        allItinerarios.sort((a, b) => {
+            const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
+            const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;
+            if (ordA !== ordB) return ordA - ordB;
+            return (a.createdAt || "").localeCompare(b.createdAt || "");
+        });
+
+        // Populate cEtapa dropdown in correct order
+        allItinerarios.forEach(data => {
+            const label = data.orden ? `${data.orden}. ${data.nombre}` : data.nombre;
+            cEtapa.appendChild(new Option(label, data.id));
+        });
+
         renderEtapasFechasTable();
     } catch(e) {
         console.error("Error loading stages list:", e);
@@ -149,7 +185,9 @@ function renderEtapasFechasTable() {
     allItinerarios.forEach(it => {
         const row = document.createElement("tr");
         row.style.borderBottom = "1px solid #e2e8f0";
+        const ordenLabel = it.orden ? `<strong>${it.orden}</strong>` : "—";
         row.innerHTML = `
+            <td style="padding: 8px 6px; color: #64748b; font-weight: 600; text-align: center; width: 60px;">${ordenLabel}</td>
             <td style="padding: 8px 6px; color: #334155; font-weight: 500;">${it.nombre}</td>
             <td style="padding: 8px 6px;">
                 <input type="date" class="comunidad-etapa-date-input" data-etapa-id="${it.id}" ${canSaveFechas ? "" : "disabled"} style="width: 100%; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.8rem; font-family: sans-serif;">
@@ -303,6 +341,8 @@ btnNueva.addEventListener("click", async () => {
     datosForm.style.display = "block";
     cardResponsables.style.display = "none";
     cardHermanos.style.display = "none";
+    if (cardHermanosNoActivos) cardHermanosNoActivos.style.display = "none";
+    if (cardHermanosCeleste) cardHermanosCeleste.style.display = "none";
     btnDeleteComunidad.style.display = "none";
 });
 
@@ -333,6 +373,8 @@ async function loadComunidad() {
     datosView.style.display = "block";
     cardResponsables.style.display = "block";
     cardHermanos.style.display = "block";
+    if (cardHermanosNoActivos) cardHermanosNoActivos.style.display = "block";
+    if (cardHermanosCeleste) cardHermanosCeleste.style.display = "block";
     btnDeleteComunidad.style.display = (window.hasPermission && window.hasPermission("comunidad_eliminar")) ? "block" : "none";
 }
 
@@ -385,7 +427,7 @@ function renderDatosView(c, nombreParroquia) {
             completedStages.forEach(cs => {
                 const badge = document.createElement("span");
                 badge.style.cssText = "background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem; font-weight: 500; color: #475569;";
-                badge.innerHTML = `🎓 <strong>${cs.nombre}</strong> (${cs.fecha})`;
+                badge.innerHTML = `✟ <strong>${cs.nombre}</strong> (${cs.fecha})`;
                 readList.appendChild(badge);
             });
         }
@@ -650,6 +692,11 @@ async function loadHermanos() {
     hermanosLoading.style.display = "flex";
     hermanosTable.style.display   = "none";
     hermanosEmpty.style.display   = "none";
+    
+    if (hermanosNoActivosTable) hermanosNoActivosTable.style.display = "none";
+    if (hermanosNoActivosEmpty) hermanosNoActivosEmpty.style.display = "none";
+    if (hermanosCelesteTable) hermanosCelesteTable.style.display = "none";
+    if (hermanosCelesteEmpty) hermanosCelesteEmpty.style.display = "none";
 
     const snap = await getDocs(query(
         collection(db, "hermanos"),
@@ -657,38 +704,84 @@ async function loadHermanos() {
     ));
 
     hermanosLoading.style.display = "none";
-    const comHermanos = [];
+    const rawHermanos = [];
     snap.forEach(d => {
-        const data = d.data();
-        if (data.razon !== "Comunidad Celeste") {
-            comHermanos.push({ id: d.id, ...data });
-        }
+        rawHermanos.push({ id: d.id, ...d.data() });
     });
 
-    if (comHermanos.length === 0) {
+    if (rawHermanos.length === 0) {
         hermanosEmpty.style.display = "block";
         hermanosCount.textContent   = "(0 hermanos)";
+        if (hermanosNoActivosEmpty) hermanosNoActivosEmpty.style.display = "block";
+        if (hermanosNoActivosCount) hermanosNoActivosCount.textContent = "(0 hermanos)";
+        if (hermanosCelesteEmpty) hermanosCelesteEmpty.style.display = "block";
+        if (hermanosCelesteCount) hermanosCelesteCount.textContent = "(0 hermanos)";
         dActivos.textContent = "0";
         dInactivos.textContent = "0";
         return;
     }
 
-    const activos = comHermanos.filter(h => h.activo !== false);
-    const inactivos = comHermanos.filter(h => h.activo === false);
+    // Filter categories
+    const celestiales = rawHermanos.filter(h => h.razon === "Comunidad Celeste");
+    const noCelestiales = rawHermanos.filter(h => h.razon !== "Comunidad Celeste");
+    const activos = noCelestiales.filter(h => h.activo !== false);
+    const inactivos = noCelestiales.filter(h => h.activo === false);
 
     dActivos.textContent = activos.length;
     dInactivos.textContent = inactivos.length;
-    hermanosCount.textContent = `(${comHermanos.length} hermanos)`;
+    hermanosCount.textContent = `(${activos.length} hermanos)`;
+    if (hermanosNoActivosCount) hermanosNoActivosCount.textContent = `(${inactivos.length} hermanos)`;
+    if (hermanosCelesteCount) hermanosCelesteCount.textContent = `(${celestiales.length} hermanos)`;
 
-    comHermanos.sort((a, b) => {
-        const nomA = `${a.primerApellido || ""} ${a.primerNombre || ""}`.toLowerCase();
-        const nomB = `${b.primerApellido || ""} ${b.primerNombre || ""}`.toLowerCase();
-        return nomA.localeCompare(nomB);
+    // Flexible sorting function
+    const getSortValue = (item, col) => {
+        if (col === "nombre") {
+            return `${item.primerNombre || ""} ${item.segundoNombre || ""} ${item.primerApellido || ""} ${item.segundoApellido || ""}`.toLowerCase().trim();
+        }
+        if (col === "cumple") {
+            if (!item.fechaNacimiento) return "99-99"; // Send empty birthdays to bottom
+            const d = new Date(item.fechaNacimiento + "T00:00:00");
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const day = String(d.getDate()).padStart(2, "0");
+            return `${m}-${day}`;
+        }
+        if (col === "celular") {
+            return String(item.telefono || "").replace(/\D/g, "");
+        }
+        if (col === "ubic") {
+            return item.location?.lat ? "a" : "z";
+        }
+        if (col === "rol") {
+            // Build temporary mapping to check positions
+            const pos = rolMapGlobal[item.id] || 99;
+            return String(pos).padStart(3, "0");
+        }
+        return "";
+    };
+
+    const makeSortFn = (col, dir) => (a, b) => {
+        const valA = getSortValue(a, col);
+        const valB = getSortValue(b, col);
+        if (valA < valB) return dir === "asc" ? -1 : 1;
+        if (valA > valB) return dir === "asc" ? 1 : -1;
+        return 0;
+    };
+
+    // Calculate temporary rolMap for sorting roles
+    const rolMapGlobal = {};
+    const tempResponsables = rawHermanos.filter(h => h.razon === "Responsable" && h.posicionResponsable && h.activo !== false);
+    tempResponsables.forEach(h => {
+        rolMapGlobal[h.id] = h.posicionResponsable;
+        if (h.esposoId) rolMapGlobal[h.esposoId] = h.posicionResponsable;
     });
 
-    // Construir responsables dinámicamente desde la lista de hermanos de esta comunidad
+    activos.sort(makeSortFn(hermanosSortColumn, hermanosSortDir));
+    inactivos.sort(makeSortFn(hermanosNoActivosSortColumn, hermanosNoActivosSortDir));
+    celestiales.sort(makeSortFn(hermanosCelesteSortColumn, hermanosCelesteSortDir));
+
+    // Build responsibles dynamically from active members
     const responsablesDinamicos = {};
-    const hermanosResponsables = comHermanos.filter(h => h.razon === "Responsable" && h.posicionResponsable && h.activo !== false);
+    const hermanosResponsables = activos.filter(h => h.razon === "Responsable" && h.posicionResponsable);
     
     hermanosResponsables.forEach(h => {
         const pos = h.posicionResponsable;
@@ -733,42 +826,65 @@ async function loadHermanos() {
         if (r?.parejaId)  rolMap[r.parejaId]  = pos;
     }
 
-    hermanosTbody.innerHTML = "";
-    comHermanos.forEach(h => {
-        const cumple = h.fechaNacimiento
-            ? new Date(h.fechaNacimiento + "T00:00:00").toLocaleDateString("es-DO", { day:"2-digit", month:"short" })
-            : "—";
-
-        const posicion   = rolMap[h.id];
-        const badgeClass = posicion === 1 ? "badge-1ro" : posicion === 2 ? "badge-2do" : posicion ? "badge-nro" : "badge-hno";
-        let rolTexto     = posicion ? NUMS_RESP[posicion] : (h.sexo === "F" ? "Hermana" : "Hermano");
-        
-        if (h.activo === false) {
-            rolTexto += " (Inactivo)";
+    const renderRows = (list, tbodyEl, tableEl, emptyEl) => {
+        tbodyEl.innerHTML = "";
+        if (list.length === 0) {
+            if (emptyEl) emptyEl.style.display = "block";
+            if (tableEl) tableEl.style.display = "none";
+            return;
         }
+        if (emptyEl) emptyEl.style.display = "none";
+        if (tableEl) tableEl.style.display = "table";
 
-        const mapsIcon = h.location?.lat
-            ? `<a href="https://www.google.com/maps?q=${h.location.lat},${h.location.lng}" target="_blank" class="icon-maps" title="Ver en Google Maps">📍</a>`
-            : `<span style="color:#dde1e7;">—</span>`;
+        list.forEach(h => {
+            const cumple = h.fechaNacimiento
+                ? new Date(h.fechaNacimiento + "T00:00:00").toLocaleDateString("es-DO", { day:"2-digit", month:"short" })
+                : "—";
 
-        const tr = document.createElement("tr");
-        if (h.activo === false) {
-            tr.style.opacity = "0.55";
-        }
-        
-        const nombreCompl = `${h.primerNombre} ${h.segundoNombre || ""} ${h.primerApellido} ${h.segundoApellido || ""}`.replace(/\s+/g, ' ').trim();
+            const posicion   = rolMap[h.id];
+            const badgeClass = posicion === 1 ? "badge-1ro" : posicion === 2 ? "badge-2do" : posicion ? "badge-nro" : "badge-hno";
+            let rolTexto     = posicion ? NUMS_RESP[posicion] : (h.sexo === "F" ? "Hermana" : "Hermano");
+            
+            if (h.activo === false) {
+                rolTexto += " (Inactivo)";
+            } else if (h.razon === "Comunidad Celeste") {
+                rolTexto += " (Celeste)";
+            }
 
-        tr.innerHTML = `
-            <td><strong>${nombreCompl}</strong></td>
-            <td>${cumple}</td>
-            <td>${h.telefono ? formatPhoneString(h.telefono) : "—"}</td>
-            <td style="text-align:center;">${mapsIcon}</td>
-            <td style="text-align:center;"><span class="badge-rol ${badgeClass}">${rolTexto}</span></td>
-        `;
-        hermanosTbody.appendChild(tr);
-    });
+            const mapsIcon = h.location?.lat
+                ? `<a href="https://www.google.com/maps?q=${h.location.lat},${h.location.lng}" target="_blank" class="icon-maps" title="Ver en Google Maps">📍</a>`
+                : `<span style="color:#dde1e7;">—</span>`;
 
-    hermanosTable.style.display = "table";
+            const tr = document.createElement("tr");
+            if (h.activo === false) {
+                tr.style.opacity = "0.7";
+            }
+            
+            const nombreCompl = `${h.primerNombre} ${h.segundoNombre || ""} ${h.primerApellido} ${h.segundoApellido || ""}`.replace(/\s+/g, ' ').trim();
+
+            tr.innerHTML = `
+                <td><strong>${nombreCompl}</strong></td>
+                <td>${cumple}</td>
+                <td>${h.telefono ? formatPhoneString(h.telefono) : "—"}</td>
+                <td style="text-align:center;">${mapsIcon}</td>
+                <td style="text-align:center;"><span class="badge-rol ${badgeClass}">${rolTexto}</span></td>
+            `;
+            tbodyEl.appendChild(tr);
+        });
+    };
+
+    // Render active list
+    renderRows(activos, hermanosTbody, hermanosTable, hermanosEmpty);
+
+    // Render inactive list
+    if (hermanosNoActivosTbody) {
+        renderRows(inactivos, hermanosNoActivosTbody, hermanosNoActivosTable, hermanosNoActivosEmpty);
+    }
+
+    // Render celestial list
+    if (hermanosCelesteTbody) {
+        renderRows(celestiales, hermanosCelesteTbody, hermanosCelesteTable, hermanosCelesteEmpty);
+    }
 }
 
 function formatPhoneString(phone) {
@@ -846,7 +962,11 @@ function showAlert(msg, type = "info") {
 }
 
 async function loadCommunityCode(comunidadId) {
-    const canSeeCode = window.hasPermission && (window.hasPermission("comunidad_codigo") || window.hasPermission("codigo_ver"));
+    const canSeeCode = window.hasPermission && (
+        window.hasPermission("comunidad_codigo") || 
+        window.hasPermission("comunidad_generar_codigo") || 
+        window.hasPermission("codigo_ver")
+    );
     if (!comunidadId || !canSeeCode) {
         document.getElementById("comunidad-codigo-widget").style.display = "none";
         return;
@@ -974,7 +1094,7 @@ function renderComunidadesTable(lista, isFilteredCall = false) {
             <td style="text-align:center;">
                 ${(window.hasPermission("comunidad_consultar") || window.hasPermission("comunidad_ver_hermanos")) ? `<button class="btn btn-sm btn-outline btn-view-table" data-id="${c.id}" title="Ver comunidad" style="margin-right:4px;">👁️</button>` : ""}
                 ${window.hasPermission("comunidad_editar") ? `<button class="btn btn-sm btn-outline btn-edit-table" data-id="${c.id}" title="Editar comunidad">✏️</button>` : ""}
-                ${window.hasPermission("comunidad_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; margin-left:4px;" data-id="${c.id}">✕</button>` : ""}
+                ${window.hasPermission("comunidad_eliminar") ? `<button class="btn btn-sm btn-outline btn-delete-table" style="color:red; border-color:#f5c6cb; padding: 5px 8px;" data-id="${c.id}">✕</button>` : ""}
             </td>
         `;
 
@@ -1121,6 +1241,59 @@ function setupSortingListeners() {
             });
         }
     });
+
+    // Brothers active list sort headers listeners
+    const actFields = ["nombre", "cumple", "celular", "ubic", "rol"];
+    actFields.forEach(f => {
+        const th = document.getElementById(`th-act-${f}`);
+        if (th) {
+            th.addEventListener("click", () => {
+                if (hermanosSortColumn === f) {
+                    hermanosSortDir = hermanosSortDir === "asc" ? "desc" : "asc";
+                } else {
+                    hermanosSortColumn = f;
+                    hermanosSortDir = "asc";
+                }
+                updateHermanosHeaderLabels();
+                loadHermanos();
+            });
+        }
+    });
+
+    // Brothers inactive list sort headers listeners
+    actFields.forEach(f => {
+        const th = document.getElementById(`th-inact-${f}`);
+        if (th) {
+            th.addEventListener("click", () => {
+                if (hermanosNoActivosSortColumn === f) {
+                    hermanosNoActivosSortDir = hermanosNoActivosSortDir === "asc" ? "desc" : "asc";
+                } else {
+                    hermanosNoActivosSortColumn = f;
+                    hermanosNoActivosSortDir = "asc";
+                }
+                updateHermanosHeaderLabels();
+                loadHermanos();
+            });
+        }
+    });
+
+    // Brothers celestial list sort headers listeners
+    actFields.forEach(f => {
+        const th = document.getElementById(`th-cel-${f}`);
+        if (th) {
+            th.addEventListener("click", () => {
+                if (hermanosCelesteSortColumn === f) {
+                    hermanosCelesteSortDir = hermanosCelesteSortDir === "asc" ? "desc" : "asc";
+                } else {
+                    hermanosCelesteSortColumn = f;
+                    hermanosCelesteSortDir = "asc";
+                }
+                updateHermanosHeaderLabels();
+                loadHermanos();
+            });
+        }
+    });
+
     setupColumnRightClickFilters();
 }
 
@@ -1133,6 +1306,43 @@ function handleSort(col) {
     }
     updateHeaderLabels();
     filterComunidades();
+}
+
+function updateHermanosHeaderLabels() {
+    const cols = {
+        "nombre": "Nombre",
+        "cumple": "Cumpleaños",
+        "celular": "Celular",
+        "ubic": "Ubic.",
+        "rol": "Rol"
+    };
+
+    // Actives headers
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-act-${k}`);
+        if (th) {
+            const arrow = k === hermanosSortColumn ? (hermanosSortDir === "asc" ? " ▲" : " ▼") : " ↕️";
+            th.innerHTML = `${cols[k]}${arrow}`;
+        }
+    });
+
+    // Inactives headers
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-inact-${k}`);
+        if (th) {
+            const arrow = k === hermanosNoActivosSortColumn ? (hermanosNoActivosSortDir === "asc" ? " ▲" : " ▼") : " ↕️";
+            th.innerHTML = `${cols[k]}${arrow}`;
+        }
+    });
+
+    // Celestials headers
+    Object.keys(cols).forEach(k => {
+        const th = document.getElementById(`th-cel-${k}`);
+        if (th) {
+            const arrow = k === hermanosCelesteSortColumn ? (hermanosCelesteSortDir === "asc" ? " ▲" : " ▼") : " ↕️";
+            th.innerHTML = `${cols[k]}${arrow}`;
+        }
+    });
 }
 
 function updateHeaderLabels() {
@@ -1424,7 +1634,14 @@ function enforcePermissions() {
     // Generar código button
     const btnGenerateCode = document.getElementById("btn-generate-code");
     if (btnGenerateCode) {
-        btnGenerateCode.style.display = window.hasPermission("comunidad_codigo") ? "inline-block" : "none";
+        const canGenerate = window.hasPermission("comunidad_codigo") || window.hasPermission("comunidad_generar_codigo");
+        btnGenerateCode.style.display = canGenerate ? "inline-block" : "none";
+    }
+
+    // Buscador input
+    const searchInput = document.getElementById("search-comunidades");
+    if (searchInput) {
+        searchInput.style.display = window.hasPermission("comunidad_buscar") ? "inline-block" : "none";
     }
 }
 

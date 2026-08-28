@@ -41,6 +41,7 @@ const usersTbody      = document.getElementById("users-tbody");
 // DOM - Grupos Subpane
 const inputGrupoId    = document.getElementById("g-id");
 const inputGrupoNombre= document.getElementById("g-nombre");
+const inputGrupoDefault = document.getElementById("g-default");
 const btnSaveGrupo    = document.getElementById("btn-save-grupo");
 const btnCancelGrupo  = document.getElementById("btn-cancel-grupo");
 const formGrupoTitle  = document.getElementById("form-grupo-title");
@@ -48,6 +49,8 @@ const gruposTbody     = document.getElementById("grupos-tbody");
 
 // DOM - Permisos Subpane
 const selectPermisosGrupo = document.getElementById("select-grupo");
+const selectCopiarOrigen  = document.getElementById("select-copiar-origen");
+const btnCopiarPermisos   = document.getElementById("btn-copiar-permisos");
 const chkAdminTotal   = document.getElementById("chk-admin-total");
 const btnSavePermisos = document.getElementById("btn-save-permisos");
 const permisosTree    = document.getElementById("permisos-tree");
@@ -73,7 +76,7 @@ let editingGrupoId = null;
 // App Ready
 window.addEventListener("app:ready", async (e) => {
     currentUser = e.detail;
-    
+
     // Bind main tabs
     tabBtnCuenta.addEventListener("click", () => switchMainTab("cuenta"));
     tabBtnAcceso.addEventListener("click", () => switchMainTab("acceso"));
@@ -98,6 +101,53 @@ window.addEventListener("app:ready", async (e) => {
 
     // Bind Permisos actions
     selectPermisosGrupo.addEventListener("change", loadGroupPermissions);
+    btnCopiarPermisos.addEventListener("click", async () => {
+        const origen = selectCopiarOrigen.value;
+        const destino = selectPermisosGrupo.value;
+        if (!origen || !destino) return;
+        if (origen === destino) {
+            alert("El grupo de origen y destino deben ser diferentes.");
+            return;
+        }
+        const confirmCopy = confirm(`¿Está seguro de que desea copiar todos los permisos de "${origen}" a "${destino}"? Esto sobrescribirá los permisos actuales del destino.`);
+        if (!confirmCopy) return;
+
+        try {
+            const docSnap = await getDoc(doc(db, "permisosRoles", origen));
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                chkAdminTotal.checked = !!data.adminTotal;
+                
+                const permissionsData = data.permissions || {};
+                const checkboxes = permisosTree.querySelectorAll(".tree-checkbox");
+                checkboxes.forEach(cb => {
+                    const id = cb.dataset.id;
+                    cb.checked = !!permissionsData[id];
+                });
+
+                // Re-sync indeterminate state
+                const parents = Array.from(permisosTree.querySelectorAll(".tree-node")).reverse();
+                parents.forEach(nodeEl => {
+                    const checkbox = nodeEl.querySelector(":scope > .tree-node-header > div > .tree-checkbox");
+                    const childrenEl = nodeEl.querySelector(".tree-node-children");
+                    if (childrenEl) {
+                        const childCheckboxes = childrenEl.querySelectorAll(`:scope > .tree-node > .tree-node-header > div > .tree-checkbox`);
+                        const allChecked = Array.from(childCheckboxes).every(cb => cb.checked);
+                        const someChecked = Array.from(childCheckboxes).some(cb => cb.checked || cb.indeterminate);
+                        checkbox.checked = allChecked;
+                        checkbox.indeterminate = !allChecked && someChecked;
+                    }
+                });
+
+                toggleAdminTotal();
+                showAlert("📋 Permisos copiados (temporalmente). Recuerde guardarlos pulsando en 'Guardar Permisos'.", "success");
+            } else {
+                alert("El grupo origen no contiene permisos configurados.");
+            }
+        } catch(err) {
+            showAlert("Error al copiar permisos: " + err.message, "error");
+        }
+    });
     chkAdminTotal.addEventListener("change", () => {
         toggleAdminTotal();
         queueAutoSave();
@@ -128,6 +178,10 @@ window.addEventListener("app:ready", async (e) => {
     await loadGroups(); 
     await loadUsers();
     await loadUsoLogs();
+
+    // Recover last visited tab from cache
+    const lastMainTab = localStorage.getItem("permisos_last_main_tab") || "cuenta";
+    switchMainTab(lastMainTab);
 });
 
 // Helpers
@@ -143,13 +197,16 @@ function switchMainTab(tab) {
     [tabBtnCuenta, tabBtnAcceso, tabBtnUsoApp].forEach(btn => btn.classList.remove("active"));
     [paneCuenta, paneAcceso, paneUsoApp].forEach(pane => pane.style.display = "none");
 
+    localStorage.setItem("permisos_last_main_tab", tab);
+
     if (tab === "cuenta") {
         tabBtnCuenta.classList.add("active");
         paneCuenta.style.display = "block";
     } else if (tab === "acceso") {
         tabBtnAcceso.classList.add("active");
         paneAcceso.style.display = "block";
-        switchSubTab("miembros");
+        const lastSubTab = localStorage.getItem("permisos_last_sub_tab") || "miembros";
+        switchSubTab(lastSubTab);
     } else if (tab === "usoapp") {
         tabBtnUsoApp.classList.add("active");
         paneUsoApp.style.display = "block";
@@ -160,6 +217,8 @@ function switchMainTab(tab) {
 function switchSubTab(subtab) {
     [subtabBtnMiembros, subtabBtnGrupos, subtabBtnPermisos].forEach(btn => btn.classList.remove("active"));
     [subpaneMiembros, subpaneGrupos, subpanePermisos].forEach(pane => pane.style.display = "none");
+
+    localStorage.setItem("permisos_last_sub_tab", subtab);
 
     if (subtab === "miembros") {
         subtabBtnMiembros.classList.add("active");
@@ -218,51 +277,69 @@ async function loadProfile() {
 
 // ── SUBTAB: GRUPOS ─────────────────────────────────
 async function loadGroups() {
-    gruposTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando...</td></tr>';
+    gruposTbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px; color:#7f8c8d;">Cargando...</td></tr>';
     try {
         const snap = await getDocs(collection(db, "permisosRoles"));
         allGroups = [];
         
-        // Ensure default groups exist in local state even if DB is empty
+        // Default system groups details
         const defaultGroups = [
-            { id: "admin", nombre: "Administradores del Sistema" },
-            { id: "responsable", nombre: "Responsables de Comunidad" },
-            { id: "hermano", nombre: "Hermanos Miembros" }
+            { id: "admin", nombre: "Administradores del Sistema", isDefaultRole: false },
+            { id: "responsable", nombre: "Responsables de Comunidad", isDefaultRole: false },
+            { id: "hermano", nombre: "Hermanos Miembros", isDefaultRole: true }
         ];
 
         snap.forEach(d => {
-            allGroups.push({ id: d.id, nombre: d.data().nombre || d.id });
+            allGroups.push({ id: d.id, nombre: d.data().nombre || d.id, isDefaultRole: d.data().isDefaultRole || false });
         });
 
         // Merge defaults if not present
         defaultGroups.forEach(dg => {
-            if (!allGroups.find(g => g.id === dg.id)) {
+            const found = allGroups.find(g => g.id === dg.id);
+            if (!found) {
                 allGroups.push(dg);
+            } else {
+                // If it is in Firestore but doesn't have isDefaultRole set, make sure we respect whatever Firestore has
+                if (found.isDefaultRole === undefined) {
+                    found.isDefaultRole = dg.isDefaultRole;
+                }
             }
         });
+
+        // If no group is set as default in DB or locally, fallback 'hermano' to default
+        const hasDefaultSet = allGroups.some(g => g.isDefaultRole);
+        if (!hasDefaultSet) {
+            const hGroup = allGroups.find(g => g.id === "hermano");
+            if (hGroup) hGroup.isDefaultRole = true;
+        }
 
         renderGruposTable();
         populateGroupsDropdowns();
     } catch(err) {
-        gruposTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
+        gruposTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Error: ${err.message}</td></tr>`;
     }
 }
 
 function renderGruposTable() {
     gruposTbody.innerHTML = "";
     allGroups.forEach(g => {
-        const isDefault = ["admin", "responsable", "hermano"].includes(g.id);
+        const isSystemDefault = ["admin", "responsable", "hermano"].includes(g.id);
         const hasDeletePerm = window.hasPermission("permisos_acceso_grupos_eliminar");
-        const deleteBtn = isDefault 
+        const deleteBtn = isSystemDefault 
             ? `<span style="color:#aaa; font-size:0.8rem; font-style:italic;">Sistema</span>` 
-            : (hasDeletePerm ? `<button class="btn btn-sm btn-outline btn-delete-grupo" style="color:red; border-color:#f5c6cb;" data-id="${g.id}">✕ Eliminar</button>` : "");
+            : (hasDeletePerm ? `<button class="btn btn-sm btn-outline btn-delete-grupo" style="color:red; border-color:#f5c6cb; padding:4px 8px; font-weight:bold;" data-id="${g.id}">✕</button>` : "");
+
+        const defaultIndicator = g.isDefaultRole 
+            ? `<span style="color:#28a745; font-weight:bold; font-size:1.2rem;" title="Rol por defecto para nuevos hermanos">✓</span>`
+            : `<span style="color:#ccc;">—</span>`;
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td><strong>${g.id}</strong></td>
             <td>${g.nombre}</td>
+            <td style="text-align:center;">${defaultIndicator}</td>
             <td style="text-align:center;">
-                ${window.hasPermission("permisos_acceso_grupos_editar") ? `<button class="btn btn-sm btn-outline btn-edit-grupo" data-id="${g.id}">✏️ Editar</button>` : ""}
+                ${window.hasPermission("permisos_acceso_grupos_editar") ? `<button class="btn btn-sm btn-outline btn-edit-grupo" style="padding:4px 8px;" data-id="${g.id}">✏️</button>` : ""}
                 ${deleteBtn}
             </td>
         `;
@@ -271,7 +348,7 @@ function renderGruposTable() {
         if (btnEditG) {
             btnEditG.addEventListener("click", () => editGrupo(g));
         }
-        if (!isDefault && hasDeletePerm) {
+        if (!isSystemDefault && hasDeletePerm) {
             const btnDelG = tr.querySelector(".btn-delete-grupo");
             if (btnDelG) {
                 btnDelG.addEventListener("click", () => deleteGrupo(g.id));
@@ -286,25 +363,68 @@ function populateGroupsDropdowns() {
     selectUserRol.innerHTML = "";
     // Populate selectPermisosGrupo
     selectPermisosGrupo.innerHTML = "";
+    // Populate selectCopiarOrigen
+    if (selectCopiarOrigen) selectCopiarOrigen.innerHTML = "";
 
     allGroups.forEach(g => {
         selectUserRol.appendChild(new Option(`${g.nombre} (${g.id})`, g.id));
         selectPermisosGrupo.appendChild(new Option(`${g.nombre} (${g.id})`, g.id));
+        if (selectCopiarOrigen) {
+            selectCopiarOrigen.appendChild(new Option(`${g.nombre} (${g.id})`, g.id));
+        }
     });
+
+    // Auto-select the default role in dropdowns
+    const defaultGroup = allGroups.find(g => g.isDefaultRole);
+    if (defaultGroup) {
+        selectUserRol.value = defaultGroup.id;
+        selectPermisosGrupo.value = defaultGroup.id;
+        if (selectCopiarOrigen) {
+            // Set Copy Source to a different option to avoid duplication error on load
+            const firstNonDefault = allGroups.find(g => g.id !== defaultGroup.id);
+            if (firstNonDefault) selectCopiarOrigen.value = firstNonDefault.id;
+        }
+    }
 }
 
 async function saveGrupo() {
     const id = inputGrupoId.value.trim().toLowerCase();
     const nombre = inputGrupoNombre.value.trim();
+    const isDef = inputGrupoDefault.checked;
 
     if (!id || !nombre) return alert("Complete los campos requeridos.");
+    
+    // Prevent adding a new group with a system reserved ID if it is a fresh registration, but allow edits of existing system default groups.
     if (editingGrupoId === null && ["admin", "responsable", "hermano"].includes(id)) {
         return alert("El identificador del grupo coincide con uno reservado por el sistema.");
     }
 
     btnSaveGrupo.disabled = true;
     try {
-        await setDoc(doc(db, "permisosRoles", id), { nombre }, { merge: true });
+        // If this role is set to default, we must un-set other roles first in Firestore
+        const snap = await getDocs(collection(db, "permisosRoles"));
+        
+        // Make sure all system roles ('admin', 'responsable', 'hermano') that might not exist in database are un-set
+        const defaultSystemRoles = ["admin", "responsable", "hermano"];
+        for (const systemId of defaultSystemRoles) {
+            const systemDocRef = doc(db, "permisosRoles", systemId);
+            const systemDocSnap = await getDoc(systemDocRef);
+            if (isDef && systemId !== id) {
+                if (systemDocSnap.exists() && systemDocSnap.data().isDefaultRole) {
+                    await updateDoc(systemDocRef, { isDefaultRole: false });
+                }
+            }
+        }
+
+        if (isDef) {
+            for (let dSnap of snap.docs) {
+                if (dSnap.id !== id && dSnap.data().isDefaultRole) {
+                    await updateDoc(doc(db, "permisosRoles", dSnap.id), { isDefaultRole: false });
+                }
+            }
+        }
+
+        await setDoc(doc(db, "permisosRoles", id), { nombre, isDefaultRole: isDef }, { merge: true });
         showAlert("✅ Grupo/Rol guardado con éxito.", "success");
         resetGrupoForm();
         await loadGroups();
@@ -320,6 +440,7 @@ function editGrupo(g) {
     inputGrupoId.value = g.id;
     inputGrupoId.readOnly = true;
     inputGrupoNombre.value = g.nombre;
+    inputGrupoDefault.checked = !!g.isDefaultRole;
 
     formGrupoTitle.textContent = "✏️ Editar Grupo / Rol";
     btnCancelGrupo.style.display = "inline-block";
@@ -529,7 +650,8 @@ const PERMISSIONS_TREE = [
       { id: "comunidad_editar", label: "Editar" },
       { id: "comunidad_eliminar", label: "Eliminar" },
       { id: "comunidad_generar_codigo", label: "Generar código único" },
-      { id: "comunidad_ver_hermanos", label: "Ver datos comunidad" }
+      { id: "comunidad_ver_hermanos", label: "Ver datos comunidad" },
+      { id: "comunidad_guardar_fechas", label: "Edicion de Fecha Convivencia Etapa(Paso)" }
     ]
   },
   {
@@ -598,6 +720,7 @@ const PERMISSIONS_TREE = [
       { id: "codigo_generar", label: "Generar codigo" },
       { id: "codigo_seleccionar_parroquia", label: "Seleccionar parroquia" },
       { id: "codigo_seleccionar_comunidad", label: "Seleccionar Comunidad" },
+      { id: "codigo_seleccionar_hermano", label: "Asignar a Hermano" },
       { id: "codigo_guardar", label: "Guardar" },
       { id: "codigo_editar", label: "Editar" },
       { id: "codigo_eliminar", label: "Eliminar" }

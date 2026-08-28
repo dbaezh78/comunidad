@@ -13,6 +13,7 @@ const btnCancel       = document.getElementById("btn-cancel");
 const searchInput     = document.getElementById("search-codes");
 const tbody           = document.getElementById("codes-tbody");
 const globalAlert     = document.getElementById("global-alert");
+const inputEmailWarning = document.getElementById("email-warning-msg");
 
 // State
 let allCodes = [];
@@ -20,14 +21,39 @@ let cachedParroquias = {};
 let cachedComunidades = {}; // id -> number
 let allHermanos = [];
 let editingCode = null;
+let loggedInUserComunidadId = null;
+let loggedInUserParroquiaId = null;
 
 // App Ready
-window.addEventListener("app:ready", async () => {
+window.addEventListener("app:ready", async (e) => {
+    const user = e.detail;
+    if (user && user.email) {
+        try {
+            const uSnap = await getDoc(doc(db, "autenticados", user.email.toLowerCase()));
+            if (uSnap.exists()) {
+                loggedInUserComunidadId = uSnap.data().comunidadId || null;
+                loggedInUserParroquiaId = uSnap.data().parroquiaId || null;
+            }
+        } catch(err) {
+            console.error("Error loading user profile in codigos:", err);
+        }
+    }
+
     enforcePermissions();
     await loadParroquias();
     await loadAllComunidadesCache();
     await loadHermanos();
     await loadCodes();
+
+    // Preselect parroquia and comunidad from user context
+    if (loggedInUserParroquiaId) {
+        selectParroquia.value = loggedInUserParroquiaId;
+        await loadComunidadesForParroquia(loggedInUserParroquiaId);
+        if (loggedInUserComunidadId) {
+            selectComunidad.value = loggedInUserComunidadId;
+            updateHermanoDropdownForSelection();
+        }
+    }
 
     selectParroquia.addEventListener("change", async () => {
         await loadComunidadesForParroquia(selectParroquia.value);
@@ -38,16 +64,70 @@ window.addEventListener("app:ready", async () => {
         updateHermanoDropdownForSelection();
     });
 
+    const checkEmailOwnership = (emailVal, isFromSelectChange = false) => {
+        if (!inputEmailWarning) return;
+        const email = (emailVal || "").trim().toLowerCase();
+        if (!email) {
+            inputEmailWarning.style.display = "none";
+            inputEmailWarning.textContent = "";
+            return;
+        }
+
+        const match = allHermanos.find(h => (h.correo || "").toLowerCase() === email);
+        if (match) {
+            // If the input was typed/pasted manually, let's select the matching hermano in selectHermano
+            if (!isFromSelectChange) {
+                const pid = selectParroquia.value;
+                const cid = selectComunidad.value;
+                // Only select if they belong to the current selected community
+                if (match.parroquiaId === pid && match.comunidadId === cid) {
+                    // Temporarily check if they are in the dropdown
+                    const optionExists = Array.from(selectHermano.options).some(opt => opt.value === match.id);
+                    if (optionExists) {
+                        selectHermano.value = match.id;
+                        // Hide warning since the hermano is now selected
+                        inputEmailWarning.style.display = "none";
+                        inputEmailWarning.textContent = "";
+                        return;
+                    }
+                }
+            }
+
+            // If it's already selected, don't show the warning
+            if (selectHermano.value === match.id) {
+                inputEmailWarning.style.display = "none";
+                inputEmailWarning.textContent = "";
+                return;
+            }
+
+            inputEmailWarning.textContent = `⚠️ Este correo le pertenece al hermano: ${match.nombre}`;
+            inputEmailWarning.style.display = "block";
+        } else {
+            // Clear selection if email was manually changed and no longer matches
+            if (!isFromSelectChange) {
+                selectHermano.value = "";
+            }
+            inputEmailWarning.style.display = "none";
+            inputEmailWarning.textContent = "";
+        }
+    };
+
     selectHermano.addEventListener("change", () => {
         const selectedHnoId = selectHermano.value;
         if (!selectedHnoId) {
             inputEmail.value = "";
+            checkEmailOwnership("", true);
             return;
         }
         const hno = allHermanos.find(h => h.id === selectedHnoId);
         if (hno) {
             inputEmail.value = hno.correo || "";
+            checkEmailOwnership(hno.correo || "", true);
         }
+    });
+
+    inputEmail.addEventListener("input", (e) => {
+        checkEmailOwnership(e.target.value, false);
     });
 
     btnGen.addEventListener("click", () => {
@@ -110,7 +190,13 @@ async function loadComunidadesForParroquia(pid) {
         coms.forEach(c => {
             selectComunidad.appendChild(new Option(`Comunidad ${c.numero}`, c.id));
         });
-        selectComunidad.disabled = false;
+        
+        // Re-enforce disabled state based on permission
+        if (window.hasPermission) {
+            selectComunidad.disabled = !window.hasPermission("codigo_seleccionar_comunidad");
+        } else {
+            selectComunidad.disabled = false;
+        }
     } catch(e) {
         console.error(e);
     }
@@ -278,6 +364,11 @@ function resetForm() {
     selectHermano.value = "";
     inputEmail.value = "";
 
+    if (inputEmailWarning) {
+        inputEmailWarning.style.display = "none";
+        inputEmailWarning.textContent = "";
+    }
+
     updateHermanoDropdownForSelection();
 
     btnCancel.style.display = "none";
@@ -307,16 +398,46 @@ function updateHermanoDropdownForSelection() {
 
     selectHermano.innerHTML = "";
 
+    const hasSelectPermission = !window.hasPermission || window.hasPermission("codigo_seleccionar_hermano");
+    if (!hasSelectPermission) {
+        selectHermano.appendChild(new Option("— Sin permiso para asignar —", ""));
+        selectHermano.disabled = true;
+        return;
+    }
+
     if (!pid || !cid) {
         selectHermano.appendChild(new Option("— Seleccionar comunidad primero —", ""));
         selectHermano.disabled = true;
         return;
     }
 
-    const filtrados = allHermanos.filter(h => h.parroquiaId === pid && h.comunidadId === cid);
+    // Get emails already assigned to any active code
+    const assignedEmails = allCodes
+        .map(c => (c.usadoPorEmail || "").toLowerCase())
+        .filter(email => email !== "");
+
+    // Get hermano IDs that are already selected in the UI (excluding current editing code)
+    const assignedHermanoIds = allHermanos.filter(h => {
+        if (!h.correo) return false;
+        // If editing a code, allow the hermano assigned to this specific editing code
+        if (editingCode) {
+            const currentCodeObj = allCodes.find(c => c.id === editingCode);
+            if (currentCodeObj && currentCodeObj.usadoPorEmail && currentCodeObj.usadoPorEmail.toLowerCase() === h.correo.toLowerCase()) {
+                return false; 
+            }
+        }
+        return assignedEmails.includes(h.correo.toLowerCase());
+    }).map(h => h.id);
+
+    // Filter hermanos of the selected community who are not already assigned a code
+    const filtrados = allHermanos.filter(h => 
+        h.parroquiaId === pid && 
+        h.comunidadId === cid && 
+        !assignedHermanoIds.includes(h.id)
+    );
 
     if (filtrados.length === 0) {
-        selectHermano.appendChild(new Option("— No hay hermanos en esta comunidad —", ""));
+        selectHermano.appendChild(new Option("— No hay hermanos disponibles —", ""));
         selectHermano.disabled = true;
         return;
     }
@@ -333,25 +454,31 @@ function enforcePermissions() {
 
     // Generar codigo (btnGen)
     const btnGen = document.getElementById("btn-gen-code");
-    if (btnGen && !window.hasPermission("codigo_generar")) {
-        btnGen.style.display = "none";
+    if (btnGen) {
+        btnGen.style.display = window.hasPermission("codigo_generar") ? "inline-block" : "none";
     }
 
     // Seleccionar parroquia (selectParroquia)
     const selectParroquia = document.getElementById("c-parroquia");
-    if (selectParroquia && !window.hasPermission("codigo_seleccionar_parroquia")) {
-        selectParroquia.disabled = true;
+    if (selectParroquia) {
+        selectParroquia.disabled = !window.hasPermission("codigo_seleccionar_parroquia");
     }
 
     // Seleccionar Comunidad (selectComunidad)
     const selectComunidad = document.getElementById("c-comunidad");
-    if (selectComunidad && !window.hasPermission("codigo_seleccionar_comunidad")) {
-        selectComunidad.disabled = true;
+    if (selectComunidad) {
+        selectComunidad.disabled = !window.hasPermission("codigo_seleccionar_comunidad");
+    }
+
+    // Seleccionar Hermano (selectHermano)
+    const selectHermanoEl = document.getElementById("c-hermano");
+    if (selectHermanoEl) {
+        selectHermanoEl.disabled = !window.hasPermission("codigo_seleccionar_hermano");
     }
 
     // Guardar (btnSave)
     const btnSave = document.getElementById("btn-save-code");
-    if (btnSave && !window.hasPermission("codigo_guardar")) {
-        btnSave.style.display = "none";
+    if (btnSave) {
+        btnSave.style.display = window.hasPermission("codigo_guardar") ? "inline-block" : "none";
     }
 }
