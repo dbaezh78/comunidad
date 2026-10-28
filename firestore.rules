@@ -18,8 +18,11 @@ service cloud.firestore {
     match /permisosRoles/{roleId} {
       allow read, write: if isAuthenticated();
     }
+    match /catalogos/{catalogoId} {
+      allow read, write: if isAuthenticated();
+    }
 
-    // ── Colecciones del Sistema (Parroquias y Comunidades) ──
+    // ── Parroquias y Subcolecciones ──
     match /parroquias/{parroquiaId} {
       allow read, write: if isAuthenticated();
       
@@ -28,7 +31,12 @@ service cloud.firestore {
       }
     }
 
-    // ── Colecciones Globales de Datos ──
+    // Permitir consultas de collectionGroup("comunidades")
+    match /{path=**}/comunidades/{comunidadId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ── Colecciones de Datos de la Aplicación ──
     match /hermanos/{hermanoId} {
       allow read, write: if isAuthenticated();
     }
@@ -49,11 +57,6 @@ service cloud.firestore {
     }
     match /misiones/{misionId} {
       allow read, write: if isAuthenticated();
-    }
-
-    // ── Regla General de Desarrollo (Temporal) ──
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 9, 17);
     }
   }
 }

@@ -72,6 +72,33 @@ body {
     color: var(--primary);
 }
 
+/* PWA Instalar */
+.install-card {
+    background: #f8fafc;
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    margin-top: 10px;
+}
+.install-btn {
+    background: var(--primary, #2563eb);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+.install-btn:hover {
+    filter: brightness(0.9);
+}
+
 /* Reglas CSS para temas */
 body.dark-theme {
     --bg: #1e293b;
@@ -153,6 +180,7 @@ function injectModal() {
                         <button class="settings-tab-btn" data-tab="tab-usuario">Usuario</button>
                         <button class="settings-tab-btn" data-tab="tab-datos">Datos</button>
                         <button class="settings-tab-btn" data-tab="tab-log">Log</button>
+                        <button class="settings-tab-btn" data-tab="tab-instalar">Instalar</button>
                     </div>
                     <div class="settings-tab-content">
                         <!-- General -->
@@ -250,6 +278,7 @@ function injectModal() {
     document.body.appendChild(containerDiv.firstElementChild);
 
     setupModalInteractions();
+    setupPWAInstall();
 }
 
 function setupModalInteractions() {
@@ -540,3 +569,72 @@ window.addEventListener("app:ready", (e) => {
     const savedFont = localStorage.getItem("selected-font") || "sans-serif";
     document.body.style.fontFamily = savedFont;
 });
+
+
+// PWA deferredPrompt variable
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const installBtn = document.getElementById('sg-btn-install-pwa');
+    const msg = document.getElementById('sg-install-msg');
+    if (installBtn) {
+        installBtn.style.display = 'inline-flex';
+    }
+    if (msg) {
+        msg.textContent = '¡Listo para instalar!';
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    const msg = document.getElementById('sg-install-msg');
+    const installBtn = document.getElementById('sg-btn-install-pwa');
+    if (msg) msg.textContent = '✅ ¡Aplicación instalada exitosamente!';
+    if (installBtn) installBtn.style.display = 'none';
+    addLog('Aplicación instalada en el dispositivo');
+});
+
+function setupPWAInstall() {
+    const installBtn = document.getElementById('sg-btn-install-pwa');
+    const msg = document.getElementById('sg-install-msg');
+    if (!installBtn) return;
+
+    // Detect if already running standalone
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone) {
+        installBtn.style.display = 'none';
+        if (msg) msg.textContent = '✅ Esta aplicación ya está instalada y ejecutándose en modo nativo.';
+        return;
+    }
+
+    if (!deferredInstallPrompt) {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+            msg.innerHTML = 'En iPhone/iPad: pulsa el botón <strong>Compartir</strong> (📤) y luego <strong>"Agregar a pantalla de inicio"</strong>.';
+            installBtn.style.display = 'none';
+        } else {
+            msg.textContent = 'Pulsa el botón o usa el menú de tres puntos de tu navegador (⋮) > "Instalar aplicación".';
+        }
+    }
+
+    installBtn.addEventListener('click', async () => {
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            const { outcome } = await deferredInstallPrompt.userChoice;
+            addLog(`Instalación PWA elección: ${outcome}`);
+            deferredInstallPrompt = null;
+        } else {
+            alert('Para instalar: abre el menú de tu navegador (⋮ o icono de instalación en la barra de direcciones) y selecciona "Instalar aplicación" o "Agregar a pantalla de inicio".');
+        }
+    });
+}
+
+// Registrar Service Worker para soporte PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+            console.log('SW registration note:', err);
+        });
+    });
+}

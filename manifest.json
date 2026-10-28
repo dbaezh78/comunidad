@@ -1,0 +1,21 @@
+{
+  "name": "Comunidad 4",
+  "short_name": "Comunidad 4",
+  "description": "Sistema de Gestión y Comunidad - Santa Iglesia Católica",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "src/img/ico.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "src/img/CristoRey.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}
