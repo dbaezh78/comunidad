@@ -1482,11 +1482,27 @@ async function loadHistorialSorteos() {
             const gridDiv = document.createElement("div");
             gridDiv.className = "carSort";
 
+            // Collect and sort all active groups by date
+            const activeGroupsList = [];
             sorteosDeTipo.forEach(data => {
                 data.grupos.forEach((g, gIdx) => {
-                    if (g.presentado) return;
+                    if (!g.presentado) {
+                        activeGroupsList.push({ data, g, gIdx });
+                    }
+                });
+            });
 
-                    const groupCouples = getGroupCouples(g, spouseMap);
+            // Sort ascending by presentation date
+            activeGroupsList.sort((a, b) => {
+                const dateA = a.g.fechaPresentacion || "";
+                const dateB = b.g.fechaPresentacion || "";
+                if (dateA && !dateB) return -1;
+                if (!dateA && dateB) return 1;
+                return dateA.localeCompare(dateB);
+            });
+
+            activeGroupsList.forEach(({ data, g, gIdx }) => {
+                const groupCouples = getGroupCouples(g, spouseMap);
                     const memberCoupleIdx = {};
                     groupCouples.forEach((couple, cIdx) => {
                         couple.forEach(id => { memberCoupleIdx[id] = cIdx; });
@@ -1570,9 +1586,8 @@ async function loadHistorialSorteos() {
                         ${footerHTML}
                     `;
                     gridDiv.appendChild(gCard);
-                });
             });
-
+            
             section.innerHTML = headerHTML;
             section.appendChild(gridDiv);
             historialListaContainer.appendChild(section);
