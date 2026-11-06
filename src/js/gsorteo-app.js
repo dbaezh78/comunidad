@@ -1,3 +1,10 @@
+function cleanStageString(str) {
+    if (!str) return '';
+    return str.toString().toLowerCase().trim()
+        .replace(/^\d+\s*[-.]*\s*/, '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 import { db } from "./firebase.js";
 import { 
     collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy 
@@ -285,7 +292,7 @@ async function loadTemasForCurrentComunidad() {
     
     // Fallback: Populate catalogTemas from global allTemas collection for current stage
     if (allTemas && allTemas.length > 0) {
-        catalogTemas = allTemas.filter(t => t.etapa && t.etapa.toLowerCase() === selectedComunidadEtapa.toLowerCase());
+        catalogTemas = allTemas.filter(t => t.etapa && cleanStageString(t.etapa) === cleanStageString(selectedComunidadEtapa));
         console.log(`Loaded ${catalogTemas.length} fallback themes from global collection for stage ${selectedComunidadEtapa}`);
     }
 }
@@ -486,7 +493,8 @@ function configureSorteoSteps() {
         "Elección", "Renovación de las Promesas Bautismales"
     ];
 
-    const currentIdx = stepOrder.indexOf(selectedComunidadEtapa);
+    const cleanCurrentStage = cleanStageString(selectedComunidadEtapa);
+    const currentIdx = stepOrder.findIndex(s => cleanStageString(s) === cleanCurrentStage);
     
     // Reuse control
     if (currentIdx >= 2) { // Shema is index 2
@@ -537,7 +545,7 @@ function populateTemasDropdown(overrideStage = null) {
     const targetStage = overrideStage || selectedComunidadEtapa;
 
     // Filter themes belonging to this stage
-    const stageThemes = sourceArray.filter(t => t.etapa && t.etapa.toLowerCase() === targetStage.toLowerCase());
+    const stageThemes = sourceArray.filter(t => t.etapa && cleanStageString(t.etapa) === cleanStageString(targetStage));
 
     const stageThemeIds = new Set(stageThemes.map(t => t.id));
 
@@ -785,7 +793,7 @@ function ejecutarSorteo() {
         const targetStage = tipo === "Articulo" ? "Traditio Symboli" : selectedComunidadEtapa;
 
         const initialThemeObj = sourceArray.find(t => t.id === themeId);
-        const stageThemes = sourceArray.filter(t => t.etapa.toLowerCase() === targetStage.toLowerCase());
+        const stageThemes = sourceArray.filter(t => cleanStageString(t.etapa) === cleanStageString(targetStage));
         
         let startMoment = new Date(startDateStr + "T00:00:00");
 
@@ -2235,7 +2243,7 @@ function addExternoGroupCard() {
     if (extTipo === "Temas" || extTipo === "Articulo") {
         const sourceArray = extTipo === "Temas" ? catalogTemas : allTemas;
         const targetStage = extTipo === "Articulo" ? "Traditio Symboli" : selectedComunidadEtapa;
-        const stageThemes = sourceArray.filter(t => t.etapa && t.etapa.toLowerCase() === targetStage.toLowerCase());
+        const stageThemes = sourceArray.filter(t => t.etapa && cleanStageString(t.etapa) === cleanStageString(targetStage));
         stageThemes.sort((a, b) => {
             const ordA = a.orden !== undefined && a.orden !== null ? parseInt(a.orden) : 999;
             const ordB = b.orden !== undefined && b.orden !== null ? parseInt(b.orden) : 999;

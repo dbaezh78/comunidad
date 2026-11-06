@@ -31,7 +31,7 @@ service cloud.firestore {
       }
     }
 
-    // Permitir consultas de collectionGroup("comunidades")
+    // Permitir consultas globales de comunidades (collectionGroup)
     match /{path=**}/comunidades/{comunidadId} {
       allow read, write: if isAuthenticated();
     }
@@ -56,6 +56,11 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
     match /misiones/{misionId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ── Colecciones dinámicas creadas desde Catálogos (ej: articulos, temas_traditio, etc.) ──
+    match /{customCollection}/{documentId} {
       allow read, write: if isAuthenticated();
     }
   }
